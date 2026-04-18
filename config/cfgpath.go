@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/slotopol/server/util"
 	"github.com/spf13/cobra"
@@ -100,6 +101,9 @@ func InitConfig() {
 			log.Printf("config path: %s\n", CfgPath)
 		}
 	}
+
+	expandConfigEnv(Cfg)
+	applyRuntimeEnv(Cfg)
 
 	// Detect SQLite path.
 	if SqlPath == "" {
@@ -209,4 +213,48 @@ func AddDir(list []string, dirs ...string) ([]string, error) {
 		list = append(list, dir)
 	}
 	return list, errors.Join(errs...)
+}
+
+func expandConfigEnv(c *Config) {
+	c.AccessKey = os.ExpandEnv(c.AccessKey)
+	c.RefreshKey = os.ExpandEnv(c.RefreshKey)
+	c.BrevoApiKey = os.ExpandEnv(c.BrevoApiKey)
+	c.BrevoEmailEndpoint = os.ExpandEnv(c.BrevoEmailEndpoint)
+	c.SenderName = os.ExpandEnv(c.SenderName)
+	c.SenderEmail = os.ExpandEnv(c.SenderEmail)
+	c.ReplytoEmail = os.ExpandEnv(c.ReplytoEmail)
+	c.EmailSubject = os.ExpandEnv(c.EmailSubject)
+	c.EmailHtmlContent = os.ExpandEnv(c.EmailHtmlContent)
+	c.DriverName = os.ExpandEnv(c.DriverName)
+	c.ClubSourceName = os.ExpandEnv(c.ClubSourceName)
+	c.SpinSourceName = os.ExpandEnv(c.SpinSourceName)
+}
+
+func applyRuntimeEnv(c *Config) {
+	if c.AccessKey == "" {
+		c.AccessKey = os.Getenv("JWT_ACCESS_KEY")
+	}
+	if c.RefreshKey == "" {
+		c.RefreshKey = os.Getenv("JWT_REFRESH_KEY")
+	}
+	if c.ClubSourceName == "" {
+		if val := os.Getenv("DB_URL"); val != "" {
+			c.ClubSourceName = val
+		} else if val := os.Getenv("DATABASE_URL"); val != "" {
+			c.ClubSourceName = val
+		}
+	}
+	if c.SpinSourceName == "" {
+		if val := os.Getenv("DB_URL"); val != "" {
+			c.SpinSourceName = val
+		} else if val := os.Getenv("DATABASE_URL"); val != "" {
+			c.SpinSourceName = val
+		}
+	}
+	if port := os.Getenv("PORT"); port != "" {
+		if !strings.HasPrefix(port, ":") {
+			port = ":" + port
+		}
+		c.PortHTTP = []string{port}
+	}
 }

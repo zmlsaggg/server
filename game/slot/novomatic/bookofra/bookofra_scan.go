@@ -1,0 +1,70 @@
+package bookofra
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"math"
+
+	"github.com/slotopol/server/game/slot"
+)
+
+func CalcStatBon(ctx context.Context, sp *slot.ScanPar, es slot.Sym) (float64, float64) {
+	var reels = ReelsBon
+	var g = NewGame(sp.Sel)
+	g.FSR = 10 // set free spins mode
+	g.ES = es
+	var s = slot.NewStatGeneric(sn, 5)
+
+	var calc = func(w io.Writer) (float64, float64) {
+		var lrtp, srtp = s.RTPsym(g.Cost(), wsc)
+		var rtpsym = lrtp + srtp
+		var q, sq = s.FSQ()
+		var rtp = sq * rtpsym
+		fmt.Fprintf(w, "symbols: %.5g(lined) + %.5g(scatter) = %.6f%%\n", lrtp*100, srtp*100, rtpsym*100)
+		fmt.Fprintf(w, "free spins %d, q = %.5g, sq = 1/(1-q) = %.6f\n", s.FSC.Load(), q, sq)
+		fmt.Fprintf(w, "free games hit rate: 1/%.5g\n", s.FGF())
+		fmt.Fprintf(w, "RTP[%d] = sq*rtp(sym) = %.5g*%.5g = %.6f%%\n", es, sq, rtpsym*100, rtp*100)
+		return rtp, math.NaN()
+	}
+
+	return slot.ScanReelsCommon(ctx, sp, s, g, reels, calc)
+}
+
+func CalcStatReg(ctx context.Context, sp *slot.ScanPar) (float64, float64) {
+	fmt.Printf("*bonus reels calculations*\n")
+	var rtpe [9]float64
+	var es slot.Sym
+	for es = 1; es < wsc; es++ {
+		fmt.Printf("*calculations for expanding symbol [%d]*\n", es)
+		rtpe[es-1], _ = CalcStatBon(ctx, sp, es)
+		if ctx.Err() != nil {
+			return 0, 0
+		}
+	}
+	var rtpfs float64
+	for _, rtp := range rtpe {
+		rtpfs += rtp
+	}
+	rtpfs /= 9
+	fmt.Printf("RTPfs = %.6f%%\n", rtpfs*100)
+
+	fmt.Printf("*regular reels calculations*\n")
+	var reels, _ = ReelsMap.FindClosest(sp.MRTP)
+	var g = NewGame(sp.Sel)
+	var s = slot.NewStatGeneric(sn, 5)
+
+	var calc = func(w io.Writer) (float64, float64) {
+		var lrtp, srtp = s.RTPsym(g.Cost(), wsc)
+		var rtpsym = lrtp + srtp
+		var q, sq = s.FSQ()
+		var rtp = rtpsym + q*rtpfs
+		fmt.Fprintf(w, "symbols: %.5g(lined) + %.5g(scatter) = %.6f%%\n", lrtp*100, srtp*100, rtpsym*100)
+		fmt.Fprintf(w, "free spins %d, q = %.5g, sq = 1/(1-q) = %.6f\n", s.FSC.Load(), q, sq)
+		fmt.Fprintf(w, "free games hit rate: 1/%.5g\n", s.FGF())
+		fmt.Fprintf(w, "RTP = %.5g(sym) + %.5g*%.5g(fg) = %.6f%%\n", rtpsym*100, q, rtpfs*100, rtp*100)
+		return rtp, math.NaN()
+	}
+
+	return slot.ScanReelsCommon(ctx, sp, s, g, reels, calc)
+}

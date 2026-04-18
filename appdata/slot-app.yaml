@@ -1,0 +1,40 @@
+authentication:
+  access-ttl: 24h
+  refresh-ttl: 72h
+  # Эти ключи тоже лучше вынести в секреты, если проект пойдет в паблик
+  access-key: ${JWT_ACCESS_KEY}
+  refresh-key: ${JWT_REFRESH_KEY}
+  nonce-timeout: 2m30s
+
+activation: 
+  use-activation: false
+  code-timeout: 15m
+
+web-server:
+  trusted-proxies: 0.0.0.0/0
+  port-http:
+  - :8080
+  read-timeout: 15s
+  read-header-timeout: 15s
+  write-timeout: 15s
+  idle-timeout: 60s
+  max-header-bytes: 1048576
+  shutdown-timeout: 15s
+
+database:
+  driver-name: postgres
+  use-spin-log: true
+  
+  # ЗАГЛУШКИ ДЛЯ СЕКРЕТОВ ХАГГИНГФЕЙСА
+  club-source-name: ${DB_URL}
+  spin-source-name: ${DB_URL}
+  
+  sql-flush-tick: 2500ms
+  club-update-buffer: 200
+  club-insert-buffer: 150
+  spin-insert-buffer: 250
+
+gameplay:
+  adjunct-limit: 100000
+  min-jackpot: 10000
+  max-spin-attempts: 300

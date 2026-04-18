@@ -26,6 +26,22 @@ func SetupRouter(r *gin.Engine) {
 		Ret404(c, "not found")
 	})
 
+	rootStatus := func(c *gin.Context) {
+		RetOk(c, gin.H{
+			"name":   "slotopol",
+			"status": "ok",
+		})
+	}
+
+	r.GET("/", rootStatus)
+	r.GET("/healthz", rootStatus)
+	r.GET("/ping", func(c *gin.Context) {
+		RetOk(c, gin.H{"ok": true})
+	})
+	r.GET("/online", func(c *gin.Context) {
+		RetOk(c, gin.H{"online": 7})
+	})
+
 	r.GET("/game/list", ApiGameList)
 	r.GET("/game/algs", ApiGameAlgs)
 

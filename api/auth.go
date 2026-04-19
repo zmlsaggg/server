@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -38,16 +39,16 @@ var (
 
 type Claims struct {
 	jwt.RegisteredClaims
-	UID uint64 `json:"uid"` 
+	UID uint64 `json:"uid"`
 }
 
 type AuthResp struct {
-	UID     uint64 `json:"uid"` 
-	Email   string `json:"email"` 
-	Access  string `json:"access"` 
-	Refresh string `json:"refresh"` 
-	Expire  string `json:"expire"` 
-	Living  string `json:"living"` 
+	UID     uint64 `json:"uid"`
+	Email   string `json:"email"`
+	Access  string `json:"access"`
+	Refresh string `json:"refresh"`
+	Expire  string `json:"expire"`
+	Living  string `json:"living"`
 }
 
 func (r *AuthResp) Setup(user *User) {
@@ -160,16 +161,22 @@ func extractAuth(c *gin.Context) (*User, error) {
 	return nil, ErrNoAuth
 }
 
+// isOAuthSecret проверяет, является ли секрет OAuth-авторизацией (Telegram/Google)
+func isOAuthSecret(secret string) bool {
+	return strings.HasPrefix(secret, "tg_") || strings.HasPrefix(secret, "google_")
+}
+
 // ApiSignin - POST /api/signin
 // Supports both form-data and JSON
+// Auto-creates users for OAuth (Telegram/Google), requires registration for email
 func ApiSignin(c *gin.Context) {
 	var arg struct {
-		UID     uint64 `form:"uid" json:"uid"` 
-		Email   string `form:"email" json:"email"` 
-		Secret  string `form:"secret" json:"secret"` 
-		SigTime string `form:"sigtime" json:"sigtime"` 
-		HS256   string `form:"hs256" json:"hs256"` 
-		Code    uint32 `form:"code" json:"code"` 
+		UID     uint64 `form:"uid" json:"uid"`
+		Email   string `form:"email" json:"email"`
+		Secret  string `form:"secret" json:"secret"`
+		SigTime string `form:"sigtime" json:"sigtime"`
+		HS256   string `form:"hs256" json:"hs256"`
+		Code    uint32 `form:"code" json:"code"`
 	}
 
 	if err := c.ShouldBind(&arg); err != nil {
@@ -191,11 +198,39 @@ func ApiSignin(c *gin.Context) {
 		}
 	}
 
+	// ===== АВТО-СОЗДАНИЕ ПОЛЬЗОВАТЕЛЯ ДЛЯ OAUTH =====
+	if user == nil && arg.UID != 0 && isOAuthSecret(arg.Secret) {
+		// Создаем пользователя автоматически для Telegram/Google входа
+		user = &User{
+			UID:    arg.UID,
+			Email:  email,
+			Secret: arg.Secret,
+			Name:   fmt.Sprintf("Player_%d", arg.UID),
+		}
+		if email == "" {
+			// Генерируем email на основе типа OAuth
+			if strings.HasPrefix(arg.Secret, "tg_") {
+				user.Email = fmt.Sprintf("tg_%d@telegram.local", arg.UID)
+			} else {
+				user.Email = fmt.Sprintf("user_%d@local", arg.UID)
+			}
+		}
+		Users.Set(user.UID, user)
+		
+		// Сразу выдаем токены для нового пользователя
+		var resp AuthResp
+		resp.Setup(user)
+		RetOk(c, resp)
+		return
+	}
+	// ================================================
+
 	if user == nil {
 		Ret403(c, ErrNoCred)
 		return
 	}
 
+	// Проверка пароля/HMAC для существующих пользователей
 	if arg.Secret != "" {
 		if user.Secret != arg.Secret {
 			Ret403(c, ErrNotPass)
@@ -235,6 +270,7 @@ func ApiSignin(c *gin.Context) {
 
 // ApiSignup - POST /api/signup
 // Supports both form-data and JSON
+// Required for email/password registration
 func ApiSignup(c *gin.Context) {
 	var arg struct {
 		Email  string `form:"email" json:"email"`

@@ -70,7 +70,15 @@ func SetupRouter(r *gin.Engine) {
 			slots.POST("/collect", ApiSlotCollect)
 		}
 
+		// Slot game sessions
 		api.POST("/game/new", ApiGameNew)
 		api.POST("/game/join", ApiGameJoin)
+		
+		// Original games (Dice, Mines, Crash, etc.)
+		api.POST("/original/new", ApiOriginalNew)
+		api.POST("/original/join", ApiOriginalJoin)
+		api.POST("/original/info", ApiOriginalInfo)
+		api.POST("/original/rtp/get", ApiOriginalRtpGet)
+		api.GET("/original/algs", ApiOriginalAlgs)
 	}
 }

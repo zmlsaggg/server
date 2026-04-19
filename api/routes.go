@@ -47,6 +47,12 @@ func SetupRouter(r *gin.Engine) {
 
 	api := r.Group("/api")
 	{
+		// Auth routes (ДОБАВЛЕНО)
+		api.POST("/signin", ApiSignin)
+		api.POST("/signup", ApiSignup)
+		api.POST("/refresh", Auth(true), ApiRefresh)
+		api.GET("/signis", Auth(false), ApiSignis)
+
 		api.GET("/ping", func(c *gin.Context) {
 			RetOk(c, gin.H{"ok": true})
 		})

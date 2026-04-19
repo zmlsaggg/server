@@ -38,16 +38,16 @@ var (
 
 type Claims struct {
 	jwt.RegisteredClaims
-	UID uint64 `json:"uid"`
+	UID uint64 `json:"uid"` 
 }
 
 type AuthResp struct {
-	UID     uint64 `json:"uid"`
-	Email   string `json:"email"`
-	Access  string `json:"access"`
-	Refresh string `json:"refresh"`
-	Expire  string `json:"expire"`
-	Living  string `json:"living"`
+	UID     uint64 `json:"uid"` 
+	Email   string `json:"email"` 
+	Access  string `json:"access"` 
+	Refresh string `json:"refresh"` 
+	Expire  string `json:"expire"` 
+	Living  string `json:"living"` 
 }
 
 func (r *AuthResp) Setup(user *User) {
@@ -160,14 +160,16 @@ func extractAuth(c *gin.Context) (*User, error) {
 	return nil, ErrNoAuth
 }
 
+// ApiSignin - POST /api/signin
+// Supports both form-data and JSON
 func ApiSignin(c *gin.Context) {
 	var arg struct {
-		UID     uint64 `form:"uid"`
-		Email   string `form:"email"`
-		Secret  string `form:"secret"`
-		SigTime string `form:"sigtime"`
-		HS256   string `form:"hs256"`
-		Code    uint32 `form:"code"`
+		UID     uint64 `form:"uid" json:"uid"` 
+		Email   string `form:"email" json:"email"` 
+		Secret  string `form:"secret" json:"secret"` 
+		SigTime string `form:"sigtime" json:"sigtime"` 
+		HS256   string `form:"hs256" json:"hs256"` 
+		Code    uint32 `form:"code" json:"code"` 
 	}
 
 	if err := c.ShouldBind(&arg); err != nil {
@@ -229,6 +231,62 @@ func ApiSignin(c *gin.Context) {
 	resp.Setup(user)
 
 	RetOk(c, resp)
+}
+
+// ApiSignup - POST /api/signup
+// Supports both form-data and JSON
+func ApiSignup(c *gin.Context) {
+	var arg struct {
+		Email  string `form:"email" json:"email"`
+		Secret string `form:"secret" json:"secret"`
+		Name   string `form:"name" json:"name"`
+	}
+
+	if err := c.ShouldBind(&arg); err != nil {
+		Ret400(c, err)
+		return
+	}
+
+	email := util.ToLower(arg.Email)
+
+	// Check if user exists
+	for _, u := range Users.Items() {
+		if u.Email == email {
+			Ret403(c, errors.New("user already exists"))
+			return
+		}
+	}
+
+	// Create new user
+	user := &User{
+		UID:    uint64(time.Now().UnixNano()),
+		Email:  email,
+		Secret: arg.Secret,
+		Name:   arg.Name,
+	}
+	Users.Set(user.UID, user)
+
+	var resp AuthResp
+	resp.Setup(user)
+
+	RetOk(c, resp)
+}
+
+// ApiSignis - GET /api/signis
+// Check if user session is valid
+func ApiSignis(c *gin.Context) {
+	user, err := extractAuth(c)
+	if err != nil {
+		Ret401(c, err)
+		return
+	}
+
+	RetOk(c, gin.H{
+		"valid": true,
+		"uid":   user.UID,
+		"email": user.Email,
+		"name":  user.Name,
+	})
 }
 
 func ApiRefresh(c *gin.Context) {

@@ -47,16 +47,17 @@ const (
 // wallet with some coins balance in each Club. User can opens several
 // games without any limitation.
 type User struct {
-	UID    uint64    `xorm:"pk autoincr" json:"uid" yaml:"uid" xml:"uid,attr"`                                         // user ID
-	CTime  time.Time `xorm:"created 'ctime' notnull default CURRENT_TIMESTAMP" json:"ctime" yaml:"ctime" xml:"ctime"`  // creation time
-	UTime  time.Time `xorm:"updated 'utime' notnull default CURRENT_TIMESTAMP" json:"utime" yaml:"utime" xml:"utime"`  // update time
-	Email  string    `xorm:"notnull unique index" json:"email" yaml:"email" xml:"email"`                               // unique user email
-	Secret string    `xorm:"notnull" json:"secret" yaml:"secret" xml:"secret"`                                         // auth password
-	Name   string    `xorm:"notnull" json:"name,omitempty" yaml:"name,omitempty" xml:"name,omitempty"`                 // user name
-	Code   uint32    `xorm:"notnull default 0" json:"code,omitempty" yaml:"code,omitempty" xml:"code,omitempty"`       // verification code
-	Status UF        `xorm:"notnull default 0" json:"status,omitempty" yaml:"status,omitempty" xml:"status,omitempty"` // account status
-	GAL    AL        `xorm:"notnull default 0" json:"gal,omitempty" yaml:"gal,omitempty" xml:"gal,omitempty"`          // global access level
-	props  util.RWMap[uint64, *Props]
+	UID      uint64    `xorm:"pk autoincr" json:"uid" yaml:"uid" xml:"uid,attr"`                                         // user ID
+	CTime    time.Time `xorm:"created 'ctime' notnull default CURRENT_TIMESTAMP" json:"ctime" yaml:"ctime" xml:"ctime"`  // creation time
+	UTime    time.Time `xorm:"updated 'utime' notnull default CURRENT_TIMESTAMP" json:"utime" yaml:"utime" xml:"utime"`  // update time
+	Email    string    `xorm:"notnull unique index" json:"email" yaml:"email" xml:"email"`                               // unique user email
+	Secret   string    `xorm:"notnull" json:"secret" yaml:"secret" xml:"secret"`                                         // auth password
+	Name     string    `xorm:"notnull" json:"name,omitempty" yaml:"name,omitempty" xml:"name,omitempty"`                 // user name
+	Code     uint32    `xorm:"notnull default 0" json:"code,omitempty" yaml:"code,omitempty" xml:"code,omitempty"`       // verification code
+	Status   UF        `xorm:"notnull default 0" json:"status,omitempty" yaml:"status,omitempty" xml:"status,omitempty"` // account status
+	GAL      AL        `xorm:"notnull default 0" json:"gal,omitempty" yaml:"gal,omitempty" xml:"gal,omitempty"`          // global access level
+	VIPLevel uint32    `xorm:"notnull default 0" json:"vip_level,omitempty" yaml:"vip_level,omitempty" xml:"vip_level,attr"` // VIP level for chat (>=2 required)
+	props    util.RWMap[uint64, *Props]
 }
 
 // Story is opened game for user with UID at club with CID.

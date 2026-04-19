@@ -3,6 +3,7 @@ package api
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/xml"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -13,16 +14,14 @@ import (
 	cfg "github.com/slotopol/server/config"
 )
 
-var OriginalCounter uint64 = 1000000 // Начинаем с большого числа
+var OriginalCounter uint64 = 1000000
 
 func NextOriginalGID() uint64 {
 	return atomic.AddUint64(&OriginalCounter, 1)
 }
 
 // ==========================================
-// ApiOriginalNew - Create new game round
-// POST /api/original/new
-// Body: {uid, cid, game, bet, client_seed}
+// ApiOriginalNew
 // ==========================================
 func ApiOriginalNew(c *gin.Context) {
 	var err error
@@ -60,6 +59,13 @@ func ApiOriginalNew(c *gin.Context) {
 		return
 	}
 
+	// Get props for wallet operations
+	var props *Props
+	if props, ok = user.props.Get(arg.CID); !ok {
+		Ret500(c, ErrNoProps)
+		return
+	}
+
 	// Validate game type
 	validGames := map[string]bool{
 		GameDice: true, GameMines: true, GameCrash: true,
@@ -72,15 +78,24 @@ func ApiOriginalNew(c *gin.Context) {
 	}
 
 	// Check balance
-	wallet := user.GetWallet(arg.CID)
-	if wallet.Balance < arg.Bet {
+	if props.Wallet < arg.Bet {
 		Ret403(c, ErrNoMoney)
 		return
 	}
 
 	// Deduct bet
-	wallet.Balance -= arg.Bet
-	user.SetWallet(arg.CID, wallet)
+	newBalance := props.Wallet - arg.Bet
+	
+	// Update wallet via BankBat (as transaction)
+	if cfg.Cfg.ClubInsertBuffer > 1 {
+		go BankBat[arg.CID].Add(cfg.XormStorage, arg.UID, arg.UID, newBalance, -arg.Bet)
+	} else if err = BankBat[arg.CID].Add(cfg.XormStorage, arg.UID, arg.UID, newBalance, -arg.Bet); err != nil {
+		Ret500(c, err)
+		return
+	}
+	
+	// Update in-memory
+	props.Wallet = newBalance
 
 	// Generate Provably Fair seeds
 	serverSeed := generateServerSeed()
@@ -98,7 +113,6 @@ func ApiOriginalNew(c *gin.Context) {
 	case GameDice:
 		gameData = &DiceData{}
 	case GameMines:
-		// Default 5x5 with 3 mines
 		mines := generateMines(25, 3, serverSeed, arg.ClientSeed, nonce)
 		gameData = &MinesData{
 			GridSize:   25,
@@ -109,7 +123,6 @@ func ApiOriginalNew(c *gin.Context) {
 			CashedOut:  false,
 		}
 	case GameCrash:
-		// Generate crash point (1.0 to ~100.0)
 		crashPoint := generateCrashPoint(serverSeed, arg.ClientSeed, nonce)
 		gameData = &CrashData{
 			Multiplier: 1.0,
@@ -138,16 +151,16 @@ func ApiOriginalNew(c *gin.Context) {
 		Nonce:      nonce,
 		CreatedAt:  now,
 		UpdatedAt:  now,
-		ExpiresAt:  now + 86400, // 24 hours
+		ExpiresAt:  now + 86400,
 	}
 
 	SetOriginalScene(scene)
 
-	// Return response (server seed is hashed for client)
+	// Return response
 	ret.GID = gid
 	ret.Game = arg.Game
 	ret.Bet = arg.Bet
-	ret.Balance = wallet.Balance
+	ret.Balance = props.Wallet
 	ret.Status = OriginalStatusActive
 	ret.ClientSeed = arg.ClientSeed
 	ret.ServerHash = hashServerSeed(serverSeed)
@@ -158,9 +171,7 @@ func ApiOriginalNew(c *gin.Context) {
 }
 
 // ==========================================
-// ApiOriginalJoin - Perform game action
-// POST /api/original/join
-// Body: {gid, uid, action, [params]}
+// ApiOriginalJoin
 // ==========================================
 func ApiOriginalJoin(c *gin.Context) {
 	var err error
@@ -200,17 +211,30 @@ func ApiOriginalJoin(c *gin.Context) {
 		return
 	}
 
+	// Get user props for wallet operations
+	var user *User
+	if user, ok = Users.Get(arg.UID); !ok {
+		Ret404(c, ErrNoUser)
+		return
+	}
+	
+	var props *Props
+	if props, ok = user.props.Get(scene.CID); !ok {
+		Ret500(c, ErrNoProps)
+		return
+	}
+
 	// Process action based on game type
 	var result gin.H
 	switch scene.Game {
 	case GameMines:
-		result = processMinesAction(scene, arg)
+		result = processMinesAction(scene, arg, props)
 	case GameDice:
-		result = processDiceAction(scene, arg)
+		result = processDiceAction(scene, arg, props)
 	case GameCrash:
-		result = processCrashAction(scene, arg)
+		result = processCrashAction(scene, arg, props)
 	case GameCoinflip:
-		result = processCoinflipAction(scene, arg)
+		result = processCoinflipAction(scene, arg, props)
 	default:
 		Ret400(c, AEC_original_join_invalid_action)
 		return
@@ -224,9 +248,7 @@ func ApiOriginalJoin(c *gin.Context) {
 }
 
 // ==========================================
-// ApiOriginalInfo - Get game info
-// POST /api/original/info
-// Body: {gid, uid}
+// ApiOriginalInfo
 // ==========================================
 func ApiOriginalInfo(c *gin.Context) {
 	var err error
@@ -235,18 +257,6 @@ func ApiOriginalInfo(c *gin.Context) {
 		XMLName xml.Name `json:"-" yaml:"-" xml:"arg"`
 		GID     uint64   `json:"gid" yaml:"gid" xml:"gid,attr" form:"gid" binding:"required"`
 		UID     uint64   `json:"uid" yaml:"uid" xml:"uid,attr" form:"uid" binding:"required"`
-	}
-	var ret struct {
-		XMLName    xml.Name    `json:"-" yaml:"-" xml:"ret"`
-		GID        uint64      `json:"gid" yaml:"gid" xml:"gid"`
-		Game       string      `json:"game" yaml:"game" xml:"game"`
-		Bet        float64     `json:"bet" yaml:"bet" xml:"bet"`
-		Status     string      `json:"status" yaml:"status" xml:"status"`
-		Win        float64     `json:"win" yaml:"win" xml:"win"`
-		Multiplier float64     `json:"multiplier" yaml:"multiplier" xml:"multiplier"`
-		Data       interface{} `json:"data" yaml:"data" xml:"data"`
-		ClientSeed string      `json:"client_seed" yaml:"client_seed" xml:"client_seed"`
-		Nonce      int64       `json:"nonce" yaml:"nonce" xml:"nonce"`
 	}
 
 	if err = c.ShouldBind(&arg); err != nil {
@@ -265,44 +275,32 @@ func ApiOriginalInfo(c *gin.Context) {
 		return
 	}
 
-	// Return server seed only if game is finished
-	ret.GID = scene.GID
-	ret.Game = scene.Game
-	ret.Bet = scene.Bet
-	ret.Status = scene.Status
-	ret.Win = scene.Win
-	ret.Multiplier = scene.Multiplier
-	ret.Data = filterGameDataForClient(scene.Data, scene.Game)
-	ret.ClientSeed = scene.ClientSeed
-	ret.Nonce = scene.Nonce
+	// Build response
+	response := gin.H{
+		"gid":         scene.GID,
+		"game":        scene.Game,
+		"bet":         scene.Bet,
+		"status":      scene.Status,
+		"win":         scene.Win,
+		"multiplier":  scene.Multiplier,
+		"data":        filterGameDataForClient(scene.Data, scene.Game),
+		"client_seed": scene.ClientSeed,
+		"nonce":       scene.Nonce,
+	}
 
 	// If finished, reveal server seed
 	if scene.Status == OriginalStatusFinished {
-		// Add server seed to response
-		RetOk(c, gin.H{
-			"gid":         ret.GID,
-			"game":        ret.Game,
-			"bet":         ret.Bet,
-			"status":      ret.Status,
-			"win":         ret.Win,
-			"multiplier":  ret.Multiplier,
-			"data":        ret.Data,
-			"client_seed": ret.ClientSeed,
-			"nonce":       ret.Nonce,
-			"server_seed": scene.ServerSeed,
-			"server_hash": hashServerSeed(scene.ServerSeed),
-		})
-		return
+		response["server_seed"] = scene.ServerSeed
+		response["server_hash"] = hashServerSeed(scene.ServerSeed)
+	} else {
+		response["server_hash"] = hashServerSeed(scene.ServerSeed)
 	}
 
-	ret.Status = scene.Status
-	RetOk(c, ret)
+	RetOk(c, response)
 }
 
 // ==========================================
-// ApiOriginalRtpGet - Get RTP settings
-// POST /api/original/rtp/get
-// Body: {game}
+// ApiOriginalRtpGet
 // ==========================================
 func ApiOriginalRtpGet(c *gin.Context) {
 	var err error
@@ -321,7 +319,6 @@ func ApiOriginalRtpGet(c *gin.Context) {
 		return
 	}
 
-	// Default RTP settings for original games
 	rtpSettings := map[string]gin.H{
 		GameDice: {
 			"rtp":        98.0,
@@ -363,9 +360,7 @@ func ApiOriginalRtpGet(c *gin.Context) {
 }
 
 // ==========================================
-// ApiOriginalAlgs - Get Provably Fair algorithms
-// GET /api/original/algs
-// Query: ?gameId=&userId=
+// ApiOriginalAlgs
 // ==========================================
 func ApiOriginalAlgs(c *gin.Context) {
 	gameId := c.Query("gameId")
@@ -395,7 +390,7 @@ func ApiOriginalAlgs(c *gin.Context) {
 }
 
 // ==========================================
-// Game Action Processors
+// Game Action Processors (updated with props)
 // ==========================================
 
 func processMinesAction(scene *OriginalScene, arg struct {
@@ -407,7 +402,7 @@ func processMinesAction(scene *OriginalScene, arg struct {
 	Target    float64  `json:"target" yaml:"target" xml:"target,attr" form:"target"`
 	IsOver    bool     `json:"is_over" yaml:"is_over" xml:"is_over,attr" form:"is_over"`
 	Choice    string   `json:"choice" yaml:"choice" xml:"choice,attr" form:"choice"`
-}) gin.H {
+}, props *Props) gin.H {
 	data := scene.Data.(*MinesData)
 
 	switch arg.Action {
@@ -417,42 +412,34 @@ func processMinesAction(scene *OriginalScene, arg struct {
 			return gin.H{"error": "invalid cell", "code": AEC_original_join_invalid_action}
 		}
 
-		// Check if already revealed
 		for _, r := range data.Revealed {
 			if r == cell {
 				return gin.H{"error": "already revealed", "code": AEC_original_join_invalid_action}
 			}
 		}
 
-		// Reveal cell
 		data.Revealed = append(data.Revealed, cell)
 
-		// Check if mine
 		for _, mine := range data.Mines {
 			if mine == cell {
-				// Hit mine - game over
 				scene.Status = OriginalStatusFinished
 				scene.Win = 0
 				data.CashedOut = false
 
-				// Return with revealed mines
 				return gin.H{
-					"status":   OriginalStatusFinished,
-					"result":   "loss",
-					"win":      0,
-					"cell":     cell,
-					"mine":     true,
-					"mines":    data.Mines, // Reveal all mines
-					"balance":  userGetBalance(scene.UID, scene.CID),
+					"status":      OriginalStatusFinished,
+					"result":      "loss",
+					"win":         0,
+					"cell":        cell,
+					"mine":        true,
+					"mines":       data.Mines,
+					"balance":     props.Wallet,
 					"server_seed": scene.ServerSeed,
 				}
 			}
 		}
 
-		// Found gem
 		data.GemsFound++
-
-		// Calculate multiplier based on revealed tiles
 		multiplier := calculateMinesMultiplier(data.GemsFound, data.MinesCount, data.GridSize)
 		scene.Multiplier = multiplier
 		scene.Win = scene.Bet * multiplier
@@ -473,17 +460,20 @@ func processMinesAction(scene *OriginalScene, arg struct {
 			data.CashedOut = true
 
 			// Credit win
-			user, _ := Users.Get(scene.UID)
-			wallet := user.GetWallet(scene.CID)
-			wallet.Balance += scene.Win
-			user.SetWallet(scene.CID, wallet)
+			newBalance := props.Wallet + scene.Win
+			if cfg.Cfg.ClubInsertBuffer > 1 {
+				go BankBat[scene.CID].Add(cfg.XormStorage, scene.UID, scene.UID, newBalance, scene.Win)
+			} else if err := BankBat[scene.CID].Add(cfg.XormStorage, scene.UID, scene.UID, newBalance, scene.Win); err != nil {
+				// Log error but continue
+			}
+			props.Wallet = newBalance
 
 			return gin.H{
 				"status":      OriginalStatusFinished,
 				"result":      "win",
 				"win":         scene.Win,
 				"multiplier":  scene.Multiplier,
-				"balance":     wallet.Balance,
+				"balance":     props.Wallet,
 				"server_seed": scene.ServerSeed,
 			}
 		}
@@ -501,20 +491,18 @@ func processDiceAction(scene *OriginalScene, arg struct {
 	Target    float64  `json:"target" yaml:"target" xml:"target,attr" form:"target"`
 	IsOver    bool     `json:"is_over" yaml:"is_over" xml:"is_over,attr" form:"is_over"`
 	Choice    string   `json:"choice" yaml:"choice" xml:"choice,attr" form:"choice"`
-}) gin.H {
+}, props *Props) gin.H {
 	data := scene.Data.(*DiceData)
 
 	if arg.Action != "roll" {
 		return gin.H{"error": "invalid action", "code": AEC_original_join_invalid_action}
 	}
 
-	// Generate roll 0-100
 	roll := generateDiceRoll(scene.ServerSeed, scene.ClientSeed, scene.Nonce)
 	data.Roll = roll
 	data.Target = arg.Target
 	data.IsOver = arg.IsOver
 
-	// Determine win
 	win := false
 	if arg.IsOver && roll > arg.Target {
 		win = true
@@ -524,17 +512,19 @@ func processDiceAction(scene *OriginalScene, arg struct {
 
 	data.Result = "loss"
 	if win {
-		// Calculate multiplier (example: over 50 = 1.98x)
 		multiplier := calculateDiceMultiplier(arg.Target, arg.IsOver)
 		scene.Multiplier = multiplier
 		scene.Win = scene.Bet * multiplier
 		data.Result = "win"
 
 		// Credit win
-		user, _ := Users.Get(scene.UID)
-		wallet := user.GetWallet(scene.CID)
-		wallet.Balance += scene.Win
-		user.SetWallet(scene.CID, wallet)
+		newBalance := props.Wallet + scene.Win
+		if cfg.Cfg.ClubInsertBuffer > 1 {
+			go BankBat[scene.CID].Add(cfg.XormStorage, scene.UID, scene.UID, newBalance, scene.Win)
+		} else if err := BankBat[scene.CID].Add(cfg.XormStorage, scene.UID, scene.UID, newBalance, scene.Win); err != nil {
+			// Log error
+		}
+		props.Wallet = newBalance
 	}
 
 	scene.Status = OriginalStatusFinished
@@ -547,7 +537,7 @@ func processDiceAction(scene *OriginalScene, arg struct {
 		"is_over":     arg.IsOver,
 		"win":         scene.Win,
 		"multiplier":  scene.Multiplier,
-		"balance":     userGetBalance(scene.UID, scene.CID),
+		"balance":     props.Wallet,
 		"server_seed": scene.ServerSeed,
 	}
 }
@@ -561,37 +551,38 @@ func processCrashAction(scene *OriginalScene, arg struct {
 	Target    float64  `json:"target" yaml:"target" xml:"target,attr" form:"target"`
 	IsOver    bool     `json:"is_over" yaml:"is_over" xml:"is_over,attr" form:"is_over"`
 	Choice    string   `json:"choice" yaml:"choice" xml:"choice,attr" form:"choice"`
-}) gin.H {
+}, props *Props) gin.H {
 	data := scene.Data.(*CrashData)
 
 	switch arg.Action {
 	case "cashout":
 		if data.CrashedAt <= 1.0 {
-			// Already crashed
 			scene.Status = OriginalStatusFinished
 			scene.Win = 0
 
 			return gin.H{
-				"status":     OriginalStatusFinished,
-				"result":     "loss",
-				"crashed_at": data.CrashedAt,
-				"win":        0,
-				"balance":    userGetBalance(scene.UID, scene.CID),
+				"status":      OriginalStatusFinished,
+				"result":      "loss",
+				"crashed_at":  data.CrashedAt,
+				"win":         0,
+				"balance":     props.Wallet,
 				"server_seed": scene.ServerSeed,
 			}
 		}
 
-		// Cash out at current multiplier
 		data.CashedOut = true
 		data.CashoutAt = data.Multiplier
 		scene.Status = OriginalStatusFinished
 		scene.Win = scene.Bet * data.Multiplier
 
 		// Credit win
-		user, _ := Users.Get(scene.UID)
-		wallet := user.GetWallet(scene.CID)
-		wallet.Balance += scene.Win
-		user.SetWallet(scene.CID, wallet)
+		newBalance := props.Wallet + scene.Win
+		if cfg.Cfg.ClubInsertBuffer > 1 {
+			go BankBat[scene.CID].Add(cfg.XormStorage, scene.UID, scene.UID, newBalance, scene.Win)
+		} else if err := BankBat[scene.CID].Add(cfg.XormStorage, scene.UID, scene.UID, newBalance, scene.Win); err != nil {
+			// Log error
+		}
+		props.Wallet = newBalance
 
 		return gin.H{
 			"status":      OriginalStatusFinished,
@@ -599,7 +590,7 @@ func processCrashAction(scene *OriginalScene, arg struct {
 			"cashout_at":  data.CashoutAt,
 			"multiplier":  data.Multiplier,
 			"win":         scene.Win,
-			"balance":     wallet.Balance,
+			"balance":     props.Wallet,
 			"server_seed": scene.ServerSeed,
 		}
 	}
@@ -616,30 +607,32 @@ func processCoinflipAction(scene *OriginalScene, arg struct {
 	Target    float64  `json:"target" yaml:"target" xml:"target,attr" form:"target"`
 	IsOver    bool     `json:"is_over" yaml:"is_over" xml:"is_over,attr" form:"is_over"`
 	Choice    string   `json:"choice" yaml:"choice" xml:"choice,attr" form:"choice"`
-}) gin.H {
+}, props *Props) gin.H {
 	data := scene.Data.(*CoinflipData)
 
 	if arg.Action != "flip" {
 		return gin.H{"error": "invalid action", "code": AEC_original_join_invalid_action}
 	}
 
-	// Generate result
 	result := generateCoinflipResult(scene.ServerSeed, scene.ClientSeed, scene.Nonce)
 	data.Choice = arg.Choice
 	data.Result = result
 
 	win := arg.Choice == result
-	scene.Multiplier = 1.98 // 2% house edge
+	scene.Multiplier = 1.98
 	scene.Status = OriginalStatusFinished
 
 	if win {
 		scene.Win = scene.Bet * scene.Multiplier
 
 		// Credit win
-		user, _ := Users.Get(scene.UID)
-		wallet := user.GetWallet(scene.CID)
-		wallet.Balance += scene.Win
-		user.SetWallet(scene.CID, wallet)
+		newBalance := props.Wallet + scene.Win
+		if cfg.Cfg.ClubInsertBuffer > 1 {
+			go BankBat[scene.CID].Add(cfg.XormStorage, scene.UID, scene.UID, newBalance, scene.Win)
+		} else if err := BankBat[scene.CID].Add(cfg.XormStorage, scene.UID, scene.UID, newBalance, scene.Win); err != nil {
+			// Log error
+		}
+		props.Wallet = newBalance
 	}
 
 	return gin.H{
@@ -648,7 +641,7 @@ func processCoinflipAction(scene *OriginalScene, arg struct {
 		"choice":      arg.Choice,
 		"win":         scene.Win,
 		"multiplier":  scene.Multiplier,
-		"balance":     userGetBalance(scene.UID, scene.CID),
+		"balance":     props.Wallet,
 		"server_seed": scene.ServerSeed,
 	}
 }
@@ -675,7 +668,6 @@ func hashServerSeed(seed string) string {
 }
 
 func generateMines(gridSize, count int, serverSeed, clientSeed string, nonce int64) []int {
-	// Provably fair mines generation
 	h := sha256.New()
 	h.Write([]byte(serverSeed + clientSeed + fmt.Sprintf("%d", nonce)))
 	hash := hex.EncodeToString(h.Sum(nil))
@@ -684,11 +676,9 @@ func generateMines(gridSize, count int, serverSeed, clientSeed string, nonce int
 	used := map[int]bool{}
 
 	for i := 0; i < count; i++ {
-		// Use hash bytes to determine positions
 		idx := (i * 2) % len(hash)
 		pos := int(hash[idx]) % gridSize
 
-		// Ensure unique
 		for used[pos] {
 			pos = (pos + 1) % gridSize
 		}
@@ -700,23 +690,19 @@ func generateMines(gridSize, count int, serverSeed, clientSeed string, nonce int
 }
 
 func generateCrashPoint(serverSeed, clientSeed string, nonce int64) float64 {
-	// Provably fair crash point (1% chance of 1.00, exponential distribution)
 	h := sha256.New()
 	h.Write([]byte(serverSeed + clientSeed + fmt.Sprintf("%d", nonce)))
 	hash := hex.EncodeToString(h.Sum(nil))
 
-	// Use first 8 hex chars as int
 	n := 0
 	for i := 0; i < 8; i++ {
 		n = n*256 + int(hash[i])
 	}
 
-	// 1% instant crash
 	if n%100 == 0 {
 		return 1.0
 	}
 
-	// Exponential distribution
 	e := float64(n%1000000) / 1000000.0
 	crash := 0.99 / (1.0 - e)
 	if crash < 1.0 {
@@ -734,13 +720,12 @@ func generateDiceRoll(serverSeed, clientSeed string, nonce int64) float64 {
 	h.Write([]byte(serverSeed + clientSeed + fmt.Sprintf("%d", nonce)))
 	hash := hex.EncodeToString(h.Sum(nil))
 
-	// First 4 bytes to 0-100 float
 	n := 0
 	for i := 0; i < 4; i++ {
 		n = n*256 + int(hash[i])
 	}
 
-	return float64(n%10000) / 100.0 // 0.00 to 99.99
+	return float64(n%10000) / 100.0
 }
 
 func generateCoinflipResult(serverSeed, clientSeed string, nonce int64) string {
@@ -755,15 +740,11 @@ func generateCoinflipResult(serverSeed, clientSeed string, nonce int64) string {
 }
 
 func calculateMinesMultiplier(gemsFound, minesCount, gridSize int) float64 {
-	// Simplified multiplier calculation
-	// More gems = higher multiplier, more mines = higher multiplier per gem
 	remaining := gridSize - minesCount
 	if gemsFound >= remaining {
-		// All gems found - max win
-		return 10.0 // Cap at 10x for safety
+		return 10.0
 	}
 
-	// Progressive multiplier
 	base := 1.0
 	riskFactor := float64(minesCount) / float64(gridSize)
 
@@ -779,7 +760,6 @@ func calculateMinesMultiplier(gemsFound, minesCount, gridSize int) float64 {
 }
 
 func calculateDiceMultiplier(target float64, isOver bool) float64 {
-	// Lower probability = higher multiplier
 	var probability float64
 	if isOver {
 		probability = (100.0 - target) / 100.0
@@ -791,7 +771,6 @@ func calculateDiceMultiplier(target float64, isOver bool) float64 {
 		return 1.0
 	}
 
-	// 98% RTP: multiplier = 0.98 / probability
 	multiplier := 0.98 / probability
 	if multiplier > 100.0 {
 		multiplier = 100.0
@@ -800,19 +779,9 @@ func calculateDiceMultiplier(target float64, isOver bool) float64 {
 	return multiplier
 }
 
-func userGetBalance(uid, cid uint64) float64 {
-	user, ok := Users.Get(uid)
-	if !ok {
-		return 0
-	}
-	return user.GetWallet(cid).Balance
-}
-
 func filterGameDataForClient(data interface{}, game string) interface{} {
-	// Filter sensitive data (hide mines positions until game over)
 	switch d := data.(type) {
 	case *MinesData:
-		// Return without mines positions
 		return gin.H{
 			"grid_size":   d.GridSize,
 			"mines_count": d.MinesCount,
@@ -821,7 +790,6 @@ func filterGameDataForClient(data interface{}, game string) interface{} {
 			"cashed_out":  d.CashedOut,
 		}
 	case *CrashData:
-		// Return without crashed_at (hidden until finish)
 		return gin.H{
 			"multiplier": d.Multiplier,
 			"cashed_out": d.CashedOut,

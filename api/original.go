@@ -220,7 +220,7 @@ func ApiOriginalJoin(c *gin.Context) {
 	scene.UpdatedAt = time.Now().Unix()
 	SetOriginalScene(scene)
 
-	RetData(c, http.StatusOK, 0, result)
+	RetOk(c, result)
 }
 
 // ==========================================

@@ -6,7 +6,6 @@ import (
 	"encoding/xml"
 	"fmt"
 	"math/rand"
-	"net/http"
 	"sync/atomic"
 	"time"
 

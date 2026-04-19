@@ -373,6 +373,47 @@ const (
 	AEC_club_cashin_lockout
 	AEC_club_cashin_sqlbank
 	AEC_club_cashin_sqllog
+
+	// ==========================================
+	// Original Games (Instant Games) Error Codes
+	// ==========================================
+
+	// POST /original/new
+	AEC_original_new_nobind
+	AEC_original_new_nouser
+	AEC_original_new_nocid
+	AEC_original_new_nogame
+	AEC_original_new_nobet
+	AEC_original_new_invalid_game
+	AEC_original_new_nomoney
+	AEC_original_new_sql
+
+	// POST /original/join
+	AEC_original_join_nobind
+	AEC_original_join_noscene
+	AEC_original_join_nouser
+	AEC_original_join_noaccess
+	AEC_original_join_noaction
+	AEC_original_join_invalid_action
+	AEC_original_join_game_finished
+	AEC_original_join_sql
+
+	// POST /original/info
+	AEC_original_info_nobind
+	AEC_original_info_noscene
+	AEC_original_info_nouser
+	AEC_original_info_noaccess
+
+	// POST /original/rtp/get
+	AEC_original_rtpget_nobind
+	AEC_original_info_nogame
+	AEC_original_rtpget_invalid_game
+
+	// GET /original/algs
+	AEC_original_algs_nogameid
+
+	// 403 Forbidden
+	AEC_forbidden
 )
 
 var (
@@ -397,4 +438,12 @@ var (
 	ErrNoAliase  = errors.New("no game alias")
 	ErrNotOpened = errors.New("game with given ID is not opened")
 	ErrBadBank   = errors.New("can not generate spin with current bank balance")
+
+	// Original games errors
+	ErrNotOriginal   = errors.New("specified GID refers to non-original game")
+	ErrInvalidGame   = errors.New("invalid game type")
+	ErrGameFinished  = errors.New("game is already finished")
+	ErrInvalidAction = errors.New("invalid game action")
+	ErrInvalidCell   = errors.New("invalid cell index")
+	ErrAlreadyRevealed = errors.New("cell already revealed")
 )

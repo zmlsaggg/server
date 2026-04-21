@@ -242,7 +242,68 @@ func ApiUpdateCurrency(c *gin.Context) {
 	}
 
 	RetOk(c, gin.H{
-		"success": true,
+		"success":  true,
 		"currency": arg.Currency,
+	})
+}
+
+// ApiAddBalance adds balance to user wallet, creates props if not exists
+func ApiAddBalance(c *gin.Context) {
+	var arg struct {
+		UID    uint64  `json:"uid" form:"uid" binding:"required"`
+		CID    uint64  `json:"cid" form:"cid" binding:"required"`
+		Amount float64 `json:"amount" form:"amount" binding:"required"`
+	}
+
+	if err := c.ShouldBind(&arg); err != nil {
+		Ret400(c, err)
+		return
+	}
+
+	var user *User
+	var ok bool
+	if user, ok = Users.Get(arg.UID); !ok {
+		Ret404(c, ErrNoUser)
+		return
+	}
+
+	var club *Club
+	if club, ok = Clubs.Get(arg.CID); !ok {
+		Ret404(c, ErrNoClub)
+		return
+	}
+	_ = club
+
+	// Get or create props
+	var props *Props
+	if props, ok = user.props.Get(arg.CID); !ok {
+		// Create new props for this club
+		props = &Props{
+			CID:    arg.CID,
+			UID:    arg.UID,
+			Wallet: arg.Amount,
+		}
+		if err := user.InsertPropsDB(props); err != nil {
+			Ret500(c, err)
+			return
+		}
+	} else {
+		// Update existing props
+		newBalance := props.Wallet + arg.Amount
+		if cfg.Cfg.ClubInsertBuffer > 1 {
+			go BankBat[arg.CID].Add(cfg.XormStorage, arg.UID, arg.UID, newBalance, arg.Amount)
+		} else if err := BankBat[arg.CID].Add(cfg.XormStorage, arg.UID, arg.UID, newBalance, arg.Amount); err != nil {
+			Ret500(c, err)
+			return
+		}
+		props.Wallet = newBalance
+	}
+
+	RetOk(c, gin.H{
+		"success": true,
+		"uid":     arg.UID,
+		"cid":     arg.CID,
+		"wallet":  props.Wallet,
+		"added":   arg.Amount,
 	})
 }

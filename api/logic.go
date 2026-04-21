@@ -279,6 +279,16 @@ func (user *User) InsertProps(props *Props) {
 	user.props.Set(props.CID, props)
 }
 
+// InsertPropsDB creates new props in memory and saves to database
+func (user *User) InsertPropsDB(props *Props) error {
+	user.props.Set(props.CID, props)
+	// Save to database
+	session := cfg.XormStorage.NewSession()
+	defer session.Close()
+	_, err := session.Insert(props)
+	return err
+}
+
 // GetAdmin returns User pointer for authorized requests,
 // and access level for it. Or nil pointer for unauthorized requests.
 // It called after Auth(false) middleware.

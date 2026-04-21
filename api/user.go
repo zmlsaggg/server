@@ -226,3 +226,23 @@ func ApiUserDelete(c *gin.Context) {
 
 	RetOk(c, ret)
 }
+
+// ApiUpdateCurrency handles currency switching from frontend.
+// Currency is managed on the frontend; backend just acknowledges.
+func ApiUpdateCurrency(c *gin.Context) {
+	var arg struct {
+		ID              string  `json:"id" form:"id" binding:"required"`
+		Currency        string  `json:"currency" form:"currency" binding:"required"`
+		ExpectedBalance float64 `json:"expectedBalance" form:"expectedBalance"`
+	}
+
+	if err := c.ShouldBind(&arg); err != nil {
+		Ret400(c, err)
+		return
+	}
+
+	RetOk(c, gin.H{
+		"success": true,
+		"currency": arg.Currency,
+	})
+}

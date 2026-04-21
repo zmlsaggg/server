@@ -102,8 +102,17 @@ func ApiGameNew(c *gin.Context) {
 
 	var user *User
 	if user, ok = Users.Get(arg.UID); !ok {
-		Ret404(c, "user not found")
-		return
+		// Fallback: try to load user from database
+		session := cfg.XormStorage.NewSession()
+		defer session.Close()
+		
+		user = &User{UID: arg.UID}
+		if has, err := session.Get(user); err != nil || !has {
+			Ret404(c, "user not found")
+			return
+		}
+		user.Init()
+		Users.Set(user.UID, user) // Cache for future requests
 	}
 
 	alias := util.ToID(arg.Alias)

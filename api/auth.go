@@ -37,12 +37,9 @@ var (
 	ErrSmallKey = errors.New("password too small")
 )
 
-// Claims for Go backend JWT (also used for Supabase RLS via is_vip claim)
 type Claims struct {
 	jwt.RegisteredClaims
-	UID   uint64 `json:"uid"`
-	IsVIP bool   `json:"is_vip"` // VIP status for chat (>= level 2)
-	Role  string `json:"role"`   // "authenticated" for Supabase RLS
+	UID uint64 `json:"uid"`
 }
 
 type AuthResp struct {
@@ -60,19 +57,13 @@ func (r *AuthResp) Setup(user *User) {
 	accessExp := now.Add(cfg.Cfg.AccessTTL)
 	refreshExp := now.Add(cfg.Cfg.RefreshTTL)
 
-	// Determine VIP status (VIPLevel >= 2 means VIP for chat)
-	isVIP := user.VIPLevel >= 2
-
 	accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    jwtIssuer,
 			NotBefore: jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(accessExp),
-			Subject:   fmt.Sprintf("%d", user.UID), // sub = Go user ID as string
 		},
-		UID:   user.UID,
-		IsVIP: isVIP,
-		Role:  "authenticated", // Required for Supabase RLS authenticated policies
+		UID: user.UID,
 	})
 
 	r.Access, _ = accessToken.SignedString([]byte(cfg.Cfg.AccessKey))
@@ -83,11 +74,8 @@ func (r *AuthResp) Setup(user *User) {
 			Issuer:    jwtIssuer,
 			NotBefore: jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(refreshExp),
-			Subject:   fmt.Sprintf("%d", user.UID),
 		},
-		UID:   user.UID,
-		IsVIP: isVIP,
-		Role:  "authenticated",
+		UID: user.UID,
 	})
 
 	r.Refresh, _ = refreshToken.SignedString([]byte(cfg.Cfg.RefreshKey))
@@ -227,8 +215,19 @@ func ApiSignin(c *gin.Context) {
 				user.Email = fmt.Sprintf("user_%d@local", arg.UID)
 			}
 		}
+		user.Init()
+
+		// Save OAuth user to database
+		session := cfg.XormStorage.NewSession()
+		defer session.Close()
+
+		if _, err := session.Insert(user); err != nil {
+			Ret500(c, err)
+			return
+		}
+
 		Users.Set(user.UID, user)
-		
+
 		// Сразу выдаем токены для нового пользователя
 		var resp AuthResp
 		resp.Setup(user)
@@ -312,6 +311,17 @@ func ApiSignup(c *gin.Context) {
 		Secret: arg.Secret,
 		Name:   arg.Name,
 	}
+	user.Init()
+
+	// Save user to database
+	session := cfg.XormStorage.NewSession()
+	defer session.Close()
+
+	if _, err := session.Insert(user); err != nil {
+		Ret500(c, err)
+		return
+	}
+
 	Users.Set(user.UID, user)
 
 	var resp AuthResp

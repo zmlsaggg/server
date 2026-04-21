@@ -107,7 +107,6 @@ func ApiGameNew(c *gin.Context) {
 		// Fallback: try to load user from database
 		session := cfg.XormStorage.NewSession()
 		defer session.Close()
-<<<<<<< HEAD
 
 		user = &User{UID: arg.UID}
 		if has, err := session.Get(user); err != nil || !has {
@@ -148,16 +147,6 @@ func ApiGameNew(c *gin.Context) {
 			user.Init()
 			Users.Set(user.UID, user) // Cache for future requests
 		}
-=======
-		
-		user = &User{UID: arg.UID}
-		if has, err := session.Get(user); err != nil || !has {
-			Ret404(c, "user not found")
-			return
-		}
-		user.Init()
-		Users.Set(user.UID, user) // Cache for future requests
->>>>>>> ec402f977ab63018a8ba4e6efccb209bada8cbd9
 	}
 
 	alias := util.ToID(arg.Alias)

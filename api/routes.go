@@ -61,6 +61,10 @@ func SetupRouter(r *gin.Engine) {
 			RetOk(c, gin.H{"online": 7})
 		})
 
+		// User endpoints (needed by frontend)
+		api.POST("/user", ApiUserIs)
+		api.POST("/update-currency", ApiUpdateCurrency)
+
 		api.GET("/slots/game/:alias", ApiGameInfo)
 		api.GET("/slots/load", ApiGameList)
 		api.POST("/slots/spin", ApiSlotSpin)

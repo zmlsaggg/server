@@ -34,16 +34,16 @@ func ApiOriginalNew(c *gin.Context) {
 		ClientSeed string   `json:"client_seed" yaml:"client_seed" xml:"client_seed,attr" form:"client_seed"`
 	}
 	var ret struct {
-		XMLName     xml.Name    `json:"-" yaml:"-" xml:"ret"`
-		GID         uint64      `json:"gid" yaml:"gid" xml:"gid"`
-		Game        string      `json:"game" yaml:"game" xml:"game"`
-		Bet         float64     `json:"bet" yaml:"bet" xml:"bet"`
-		Balance     float64     `json:"balance" yaml:"balance" xml:"balance"`
-		Status      string      `json:"status" yaml:"status" xml:"status"`
-		ClientSeed  string      `json:"client_seed" yaml:"client_seed" xml:"client_seed"`
-		ServerHash  string      `json:"server_hash" yaml:"server_hash" xml:"server_hash"`
-		Nonce       int64       `json:"nonce" yaml:"nonce" xml:"nonce"`
-		Data        interface{} `json:"data" yaml:"data" xml:"data"`
+		XMLName    xml.Name    `json:"-" yaml:"-" xml:"ret"`
+		GID        uint64      `json:"gid" yaml:"gid" xml:"gid"`
+		Game       string      `json:"game" yaml:"game" xml:"game"`
+		Bet        float64     `json:"bet" yaml:"bet" xml:"bet"`
+		Balance    float64     `json:"balance" yaml:"balance" xml:"balance"`
+		Status     string      `json:"status" yaml:"status" xml:"status"`
+		ClientSeed string      `json:"client_seed" yaml:"client_seed" xml:"client_seed"`
+		ServerHash string      `json:"server_hash" yaml:"server_hash" xml:"server_hash"`
+		Nonce      int64       `json:"nonce" yaml:"nonce" xml:"nonce"`
+		Data       interface{} `json:"data" yaml:"data" xml:"data"`
 	}
 
 	if err = c.ShouldBind(&arg); err != nil {
@@ -51,11 +51,41 @@ func ApiOriginalNew(c *gin.Context) {
 		return
 	}
 
-	// Validate user
+	// Validate user (auto-create if not found for smoother UX)
 	var user *User
 	if user, ok = Users.Get(arg.UID); !ok {
-		Ret404(c, ErrNoUser)
-		return
+		// Auto-create user with default settings
+		user = &User{
+			UID:    arg.UID,
+			Email:  fmt.Sprintf("user_%d@auto.local", arg.UID),
+			Secret: fmt.Sprintf("auto_%d_%d", arg.UID, time.Now().Unix()),
+			Name:   fmt.Sprintf("Player_%d", arg.UID),
+		}
+		user.Init()
+
+		// Save to database
+		session := cfg.XormStorage.NewSession()
+		if _, err := session.Insert(user); err != nil {
+			session.Close()
+			Ret500(c, err)
+			return
+		}
+		session.Close()
+
+		Users.Set(user.UID, user)
+
+		// Create default props for CID=1
+		props := &Props{
+			CID:    1,
+			UID:    user.UID,
+			Wallet: 1000, // Give some starting balance
+			Access: ALmember,
+			MRTP:   0,
+		}
+		if err := user.InsertPropsDB(props); err != nil {
+			Ret500(c, err)
+			return
+		}
 	}
 
 	// Get props for wallet operations
@@ -84,7 +114,7 @@ func ApiOriginalNew(c *gin.Context) {
 
 	// Deduct bet
 	newBalance := props.Wallet - arg.Bet
-	
+
 	// Update wallet via BankBat (as transaction)
 	if cfg.Cfg.ClubInsertBuffer > 1 {
 		go BankBat[arg.CID].Add(cfg.XormStorage, arg.UID, arg.UID, newBalance, -arg.Bet)
@@ -92,7 +122,7 @@ func ApiOriginalNew(c *gin.Context) {
 		Ret500(c, err)
 		return
 	}
-	
+
 	// Update in-memory
 	props.Wallet = newBalance
 
@@ -216,7 +246,7 @@ func ApiOriginalJoin(c *gin.Context) {
 		Ret404(c, ErrNoUser)
 		return
 	}
-	
+
 	var props *Props
 	if props, ok = user.props.Get(scene.CID); !ok {
 		Ret500(c, ErrNoProps)
@@ -778,7 +808,7 @@ func calculateDiceMultiplier(target float64, isOver bool) float64 {
 	return multiplier
 }
 
-func filterGameDataForClient(data interface{}, game string) interface{} {
+func filterGameDataForClient(data interface{}, _ string) interface{} {
 	switch d := data.(type) {
 	case *MinesData:
 		return gin.H{

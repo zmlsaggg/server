@@ -3,7 +3,9 @@ package api
 import (
 	"bytes"
 	"encoding/xml"
+	"fmt"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -102,8 +104,49 @@ func ApiGameNew(c *gin.Context) {
 
 	var user *User
 	if user, ok = Users.Get(arg.UID); !ok {
-		Ret404(c, "user not found")
-		return
+		// Fallback: try to load user from database
+		session := cfg.XormStorage.NewSession()
+		defer session.Close()
+
+		user = &User{UID: arg.UID}
+		if has, err := session.Get(user); err != nil || !has {
+			session.Close()
+			// Auto-create user with default settings
+			user = &User{
+				UID:    arg.UID,
+				Email:  fmt.Sprintf("user_%d@auto.local", arg.UID),
+				Secret: fmt.Sprintf("auto_%d_%d", arg.UID, time.Now().Unix()),
+				Name:   fmt.Sprintf("Player_%d", arg.UID),
+			}
+			user.Init()
+
+			// Save to database
+			session2 := cfg.XormStorage.NewSession()
+			if _, err := session2.Insert(user); err != nil {
+				session2.Close()
+				Ret500(c, err)
+				return
+			}
+			session2.Close()
+
+			Users.Set(user.UID, user)
+
+			// Create default props for CID=1
+			props := &Props{
+				CID:    1,
+				UID:    user.UID,
+				Wallet: 1000, // Starting balance
+				Access: ALmember,
+				MRTP:   0,
+			}
+			if err := user.InsertPropsDB(props); err != nil {
+				Ret500(c, err)
+				return
+			}
+		} else {
+			user.Init()
+			Users.Set(user.UID, user) // Cache for future requests
+		}
 	}
 
 	alias := util.ToID(arg.Alias)

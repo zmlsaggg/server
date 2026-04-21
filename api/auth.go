@@ -228,6 +228,35 @@ func ApiSignin(c *gin.Context) {
 
 		Users.Set(user.UID, user)
 
+		// Create props for OAuth user based on PropMaster template
+		for _, master := range PropMaster {
+			props := &Props{
+				CID:    master.CID,
+				UID:    user.UID,
+				Wallet: master.Wallet,
+				Access: master.Access,
+				MRTP:   master.MRTP,
+			}
+			if err := user.InsertPropsDB(props); err != nil {
+				Ret500(c, err)
+				return
+			}
+		}
+		// If no PropMaster, create default props for CID=1
+		if len(PropMaster) == 0 {
+			props := &Props{
+				CID:    1,
+				UID:    user.UID,
+				Wallet: 0,
+				Access: ALmember,
+				MRTP:   0,
+			}
+			if err := user.InsertPropsDB(props); err != nil {
+				Ret500(c, err)
+				return
+			}
+		}
+
 		// Сразу выдаем токены для нового пользователя
 		var resp AuthResp
 		resp.Setup(user)
@@ -323,6 +352,35 @@ func ApiSignup(c *gin.Context) {
 	}
 
 	Users.Set(user.UID, user)
+
+	// Create props for user based on PropMaster template
+	for _, master := range PropMaster {
+		props := &Props{
+			CID:    master.CID,
+			UID:    user.UID,
+			Wallet: master.Wallet,
+			Access: master.Access,
+			MRTP:   master.MRTP,
+		}
+		if err := user.InsertPropsDB(props); err != nil {
+			Ret500(c, err)
+			return
+		}
+	}
+	// If no PropMaster, create default props for CID=1
+	if len(PropMaster) == 0 {
+		props := &Props{
+			CID:    1,
+			UID:    user.UID,
+			Wallet: 0,
+			Access: ALmember,
+			MRTP:   0,
+		}
+		if err := user.InsertPropsDB(props); err != nil {
+			Ret500(c, err)
+			return
+		}
+	}
 
 	var resp AuthResp
 	resp.Setup(user)

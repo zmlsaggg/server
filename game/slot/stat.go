@@ -27,6 +27,19 @@ type Simulator interface {
 
 type ScanPar = game.ScanPar
 
+// Re-export print flag constants from game package.
+const (
+	PF_main   = game.PF_main
+	PF_jack   = game.PF_jack
+	PF_fg     = game.PF_fg
+	PF_vi     = game.PF_vi
+	PF_ci     = game.PF_ci
+	PF_spread = game.PF_spread
+	PF_sym    = game.PF_sym
+	PF_raw    = game.PF_raw
+	PF_casc   = game.PF_casc
+)
+
 type Uint64 struct {
 	atomic.Uint64
 }
@@ -305,6 +318,16 @@ func (s *StatGeneric) JackHits(jid int) float64 {
 	return float64(s.JH[jid-1].Load())
 }
 
+// ΣPL calculates sum of pay lines for scatter symbol with free spins lengths.
+func (s *StatGeneric) ΣPL(scat Sym, L []int) float64 {
+	var sum float64
+	for i, length := range L {
+		var count = float64(s.C[scat][i+1].Load())
+		sum += count * float64(length)
+	}
+	return sum / s.Count()
+}
+
 func (s *StatGeneric) Simulate(g SlotGame, reels Reelx, wins *Wins) {
 	if g.Scanner(wins) != nil {
 		s.EC.Inc()
@@ -459,6 +482,19 @@ func (s *StatCascade) FGQ() float64 {
 // Free Games hit rate: average number of reshuffles per free games hit.
 func (s *StatCascade) FGF() float64 {
 	return s.Count() / float64(s.SumFGH())
+}
+
+// ΣPL calculates sum of pay lines for scatter symbol with free spins lengths.
+func (s *StatCascade) ΣPL(scat Sym, L []int) float64 {
+	var sum float64
+	for i, length := range L {
+		var count uint64
+		for cfn := range s.Casc {
+			count += s.Casc[cfn].C[scat][i+1].Load()
+		}
+		sum += float64(count) * float64(length)
+	}
+	return sum / s.Count()
 }
 
 // Cascade multiplier.

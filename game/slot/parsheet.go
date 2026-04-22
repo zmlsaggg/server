@@ -6,30 +6,48 @@ import (
 	"math"
 	"sort"
 
-	"github.com/slotopol/server/game"
 	"github.com/slotopol/server/util"
 	"gopkg.in/yaml.v3"
 )
+
+// Counter is an interface for slot game statistics collectors.
+// It is implemented by StatGeneric and StatCascade.
+type Counter interface {
+	Count() float64
+	SumPays() float64
+	NSQ(cost float64) (N float64, S float64, Q float64)
+	FSQ() (q float64, sq float64)
+	FGQ() float64
+	ΣPL(scat Sym, L []int) float64
+}
+
+// EvD calculates expected RTP (µ) and variance (D) from counter statistics.
+func EvD(s Counter, cost float64) (µ float64, D float64) {
+	var N, S, Q = s.NSQ(cost)
+	µ = S / N
+	D = Q/N - µ*µ
+	return
+}
 
 func Print_vi(w io.Writer, sp *ScanPar, D float64) {
 	if !sp.IsVI() {
 		return
 	}
 	var sigma = math.Sqrt(D)
-	var vi = game.GetZ(sp.Conf) * sigma
-	fmt.Fprintf(w, "sigma = %.6g, VI[%.4g%%] = %.6g (%s)\n", sigma, sp.Conf*100, vi, game.VIname5[game.VIclass5(sigma)])
+	var vi = GetZ(sp.Conf) * sigma
+	fmt.Fprintf(w, "sigma = %.6g, VI[%.4g%%] = %.6g (%s)\n", sigma, sp.Conf*100, vi, VIname5[VIclass5(sigma)])
 }
 
 func Print_ci(w io.Writer, sp *ScanPar, rtp, D float64) {
 	if !sp.IsCI() {
 		return
 	}
-	if rtp > game.RTPconv {
+	if rtp > RTPconv {
 		return
 	}
 	var sigma = math.Sqrt(D)
-	var ci = game.CI(sp.Conf, rtp, sigma)
-	var BRci = game.BankrollPlayer(sp.Conf, rtp, sigma, ci)
+	var ci = CI(sp.Conf, rtp, sigma)
+	var BRci = BankrollPlayer(sp.Conf, rtp, sigma, ci)
 	fmt.Fprintf(w, "CI[%.4g%%] = %d, bankroll[CI] = %.6g\n", sp.Conf*100, int(ci+0.5), BRci)
 }
 
@@ -41,8 +59,8 @@ func Print_spread(w io.Writer, sp *ScanPar, rtp, D float64) {
 	fmt.Fprintf(w, "RTP spread for spins number with confidence %.4g%%:\n", sp.Conf*100)
 	var N = []int{1e3, 1e4, 1e5, 1e6, 1e7}
 	var sigma = math.Sqrt(D)
-	var vi = game.GetZ(sp.Conf) * sigma
-	var ci = game.CI(sp.Conf, rtp, sigma)
+	var vi = GetZ(sp.Conf) * sigma
+	var ci = CI(sp.Conf, rtp, sigma)
 	if ci < 1e7 {
 		N = append(N, int(ci+0.5))
 		sort.Ints(N)
@@ -128,7 +146,7 @@ func Print_contribution_falls(w io.Writer, sp *ScanPar, s *StatCascade, rtp floa
 	}
 }
 
-func Print_raw(w io.Writer, sp *ScanPar, s Simulator) {
+func Print_raw(w io.Writer, sp *ScanPar, s any) {
 	if !sp.IsRaw() {
 		return
 	}
@@ -185,12 +203,22 @@ func Parsheet_simple(w io.Writer, sp *ScanPar, s Counter, cost float64) (float64
 	return µ, D
 }
 
+// Parsheet_cascade_simple is for cascade slot games (without free games).
+func Parsheet_cascade_simple(w io.Writer, sp *ScanPar, s *StatCascade, cost float64) (float64, float64) {
+	var µ, D = EvD(s, cost)
+	if sp.IsMain() {
+		fmt.Fprintf(w, "RTP = %.8g%%\n", µ*100)
+	}
+	Print_all(w, sp, s, µ, D)
+	return µ, D
+}
+
 // Parsheet for slot with retriggerable freegames
 // with `m` multiplier on freegames (m=1 if no multiplier).
 // Each hit of freegames series has `L` freespins.
 func Parsheet_fgretrig(w io.Writer, sp *ScanPar, s Counter, cost, m, L float64) (float64, float64) {
 	var µ, Dsym = EvD(s, cost)
-	var q = s.FSQ()
+	var q, _ = s.FSQ()
 	var sq = 1 / (1 - q)
 	var Pfg = s.FGQ()
 	var rtpfs = m * sq * µ
@@ -227,8 +255,9 @@ func Parsheet_fgone(w io.Writer, sp *ScanPar, s Counter, cost, m, L1, L2 float64
 }
 
 func Parsheet_fgretrig_series(w io.Writer, sp *ScanPar, s Counter, cost, m float64, L []int, scat Sym) (float64, float64) {
+	var q, _ = s.FSQ()
 	return Parsheet_fgretrig_custom(w, sp, s, cost, m,
-		s.FSQ(), s.ΣPL(scat, L))
+		q, s.ΣPL(scat, L))
 }
 
 func Parsheet_fgretrig_custom(w io.Writer, sp *ScanPar, s Counter, cost, m float64, q, ΣPL float64) (float64, float64) {
@@ -255,7 +284,7 @@ func Parsheet_fgonce_split(w io.Writer, sp *ScanPar, sr, sb Counter, cost, m, L 
 	var µb, Dsymb = EvD(sb, cost)
 	// regular reels parameters
 	var µr, Dsymr = EvD(sr, cost)
-	var qr = sr.FSQ()
+	var qr, _ = sr.FSQ()
 	var sqr = 1 / (1 - qr)
 	var Pfg = sr.FGQ()
 	// calculation
@@ -288,7 +317,7 @@ func Parsheet_fgtwice_split(w io.Writer, sp *ScanPar, sr, sb Counter, cost, m, L
 	var Pfgb = sb.FGQ()                // P
 	var Pre = 1 - math.Pow(1-Pfgb, L1) // P(A)=1−(1−P)^N
 	var rtpfs = m * µb * (1 + Pre*L2/L1)
-	var qr = sr.FSQ()
+	var qr, _ = sr.FSQ()
 	var rtp = µr + qr*rtpfs
 	var Etotal = L1 + L2*Pre
 	var Vlen = µb * µb * L2 * L2 * Pre * (1 - Pre)
@@ -318,11 +347,11 @@ func Parsheet_fgtwice_split(w io.Writer, sp *ScanPar, sr, sb Counter, cost, m, L
 func Parsheet_fgretrig_split(w io.Writer, sp *ScanPar, sr, sb Counter, cost, m, L float64) (float64, float64) {
 	// bonus reels parameters
 	var µb, Dsymb = EvD(sb, cost)
-	var qb = sb.FSQ()
+	var qb, _ = sb.FSQ()
 	var sqb = 1 / (1 - qb)
 	// regular reels parameters
 	var µr, Dsymr = EvD(sr, cost)
-	var qr = sr.FSQ()
+	var qr, _ = sr.FSQ()
 	var sqr = 1 / (1 - qr)
 	var Pfg = sr.FGQ()
 	// calculation
@@ -347,8 +376,10 @@ func Parsheet_fgretrig_split(w io.Writer, sp *ScanPar, sr, sb Counter, cost, m, 
 }
 
 func Parsheet_fgretrig_split_series(w io.Writer, sp *ScanPar, sr, sb Counter, cost, m float64, L []int, scat Sym) (float64, float64) {
+	var qr, _ = sr.FSQ()
+	var qb, _ = sb.FSQ()
 	return Parsheet_fgretrig_split_custom(w, sp, sr, sb, cost, m,
-		sr.FSQ(), sb.FSQ(), sr.ΣPL(scat, L))
+		qr, qb, sr.ΣPL(scat, L))
 }
 
 func Parsheet_fgretrig_split_custom(w io.Writer, sp *ScanPar, sr, sb Counter, cost, m float64, qr, qb, ΣPL float64) (float64, float64) {
@@ -376,4 +407,47 @@ func Parsheet_fgretrig_split_custom(w io.Writer, sp *ScanPar, sr, sb Counter, co
 	}
 	Print_all(w, sp, sr, rtp, D)
 	return rtp, D
+}
+
+// Generic wrapper functions for Parsheet functions.
+// These are convenience wrappers that redirect to the underlying Parsheet_* functions.
+
+// Parsheet_generic_simple is a wrapper for Parsheet_simple.
+func Parsheet_generic_simple(w io.Writer, sp *ScanPar, s Simulator, cost float64) (float64, float64) {
+	return Parsheet_simple(w, sp, s.(Counter), cost)
+}
+
+// Parsheet_generic_fgretrig is a wrapper for Parsheet_fgretrig.
+func Parsheet_generic_fgretrig(w io.Writer, sp *ScanPar, s Simulator, cost, m, L float64) (float64, float64) {
+	return Parsheet_fgretrig(w, sp, s.(Counter), cost, m, L)
+}
+
+// Parsheet_generic_fgone is a wrapper for Parsheet_fgone.
+func Parsheet_generic_fgone(w io.Writer, sp *ScanPar, s Simulator, cost, m, L1, L2 float64) (float64, float64) {
+	return Parsheet_fgone(w, sp, s.(Counter), cost, m, L1, L2)
+}
+
+// Parsheet_generic_fgretrig_series is a wrapper for Parsheet_fgretrig_series.
+func Parsheet_generic_fgretrig_series(w io.Writer, sp *ScanPar, s Simulator, cost, m float64, L []int, scat Sym) (float64, float64) {
+	return Parsheet_fgretrig_series(w, sp, s.(Counter), cost, m, L, scat)
+}
+
+// Parsheet_generic_fgonce_split is a wrapper for Parsheet_fgonce_split.
+func Parsheet_generic_fgonce_split(w io.Writer, sp *ScanPar, sr, sb Simulator, cost, m, L float64) (float64, float64) {
+	return Parsheet_fgonce_split(w, sp, sr.(Counter), sb.(Counter), cost, m, L)
+}
+
+// Parsheet_generic_fgtwice_split is a wrapper for Parsheet_fgtwice_split.
+func Parsheet_generic_fgtwice_split(w io.Writer, sp *ScanPar, sr, sb Simulator, cost, m, L1, L2 float64) (float64, float64) {
+	return Parsheet_fgtwice_split(w, sp, sr.(Counter), sb.(Counter), cost, m, L1, L2)
+}
+
+// Parsheet_generic_fgretrig_split is a wrapper for Parsheet_fgretrig_split.
+func Parsheet_generic_fgretrig_split(w io.Writer, sp *ScanPar, sr, sb Simulator, cost, m, L float64) (float64, float64) {
+	return Parsheet_fgretrig_split(w, sp, sr.(Counter), sb.(Counter), cost, m, L)
+}
+
+// Parsheet_generic_fgretrig_split_series is a wrapper for Parsheet_fgretrig_split_series.
+func Parsheet_generic_fgretrig_split_series(w io.Writer, sp *ScanPar, sr, sb Simulator, cost, m float64, L []int, scat Sym) (float64, float64) {
+	return Parsheet_fgretrig_split_series(w, sp, sr.(Counter), sb.(Counter), cost, m, L, scat)
 }

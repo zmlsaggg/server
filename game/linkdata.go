@@ -142,6 +142,46 @@ var (
 	ScanFactory = map[string]Scanner{}
 )
 
+// Print flags constants for ScanPar.PF field.
+const (
+	PF_main   uint = 1 << iota // print RTP, sigma and other main information
+	PF_jack                    // print info about progressive jackpots
+	PF_fg                      // print info for bonus reels
+	PF_vi                      // print volatility index
+	PF_ci                      // print index of convergence
+	PF_spread                  // print RTP spread
+	PF_sym                     // print symbols contribution to payouts
+	PF_raw                     // simulator raw data
+	PF_casc                    // print cascade metrics
+)
+
+// IsMain returns true if main information should be printed.
+func (sp *ScanPar) IsMain() bool { return sp.PF&PF_main != 0 }
+
+// IsJack returns true if jackpot info should be printed.
+func (sp *ScanPar) IsJack() bool { return sp.PF&PF_jack != 0 }
+
+// IsFG returns true if free games info should be printed.
+func (sp *ScanPar) IsFG() bool { return sp.PF&PF_fg != 0 }
+
+// IsVI returns true if volatility index should be printed.
+func (sp *ScanPar) IsVI() bool { return sp.PF&PF_vi != 0 }
+
+// IsCI returns true if convergence index should be printed.
+func (sp *ScanPar) IsCI() bool { return sp.PF&PF_ci != 0 }
+
+// IsSpread returns true if RTP spread should be printed.
+func (sp *ScanPar) IsSpread() bool { return sp.PF&PF_spread != 0 }
+
+// IsSym returns true if symbols contribution should be printed.
+func (sp *ScanPar) IsSym() bool { return sp.PF&PF_sym != 0 }
+
+// IsRaw returns true if raw data should be printed.
+func (sp *ScanPar) IsRaw() bool { return sp.PF&PF_raw != 0 }
+
+// IsCasc returns true if cascade metrics should be printed.
+func (sp *ScanPar) IsCasc() bool { return sp.PF&PF_casc != 0 }
+
 var (
 	Year = util.Year
 	Date = util.Date

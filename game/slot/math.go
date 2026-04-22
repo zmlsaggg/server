@@ -2,6 +2,10 @@ package slot
 
 import "math"
 
+// RTPconv is the RTP conversion threshold for convergence index calculations.
+// CI is not calculated for RTP values above this threshold.
+const RTPconv = 1.0
+
 // Quantile (for Volatility Index)
 func GetZ(confidence float64) float64 {
 	// probability for one side (p = 1 - alpha/2)

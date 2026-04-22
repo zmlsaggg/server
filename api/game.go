@@ -38,16 +38,21 @@ func ApiGameList(c *gin.Context) {
 	gamelist := make([]gameOut, 0, 256)
 	index := 0
 
-	tests := []string{"buffalo", "lucky-88", "queen-of-the-nile"}
+	// Hardcoded test games with correct provider prefix
+	tests := []struct{ name, alias string }{
+		{"Buffalo", "aristocrat/buffalo"},
+		{"Lucky 88", "aristocrat/lucky-88"},
+		{"Queen Of The Nile", "aristocrat/queen-of-the-nile"},
+	}
 	for _, t := range tests {
 		gamelist = append(gamelist, gameOut{
 			ID:       index,
-			GameID:   t,
-			Title:    strings.Title(strings.ReplaceAll(t, "-", " ")),
+			GameID:   strings.ReplaceAll(strings.ToLower(t.name), " ", "-"),
+			Title:    t.name,
 			Provider: "Aristocrat",
-			Alias:    t,
-			Image:    "/assets/slots/" + t + "/icon.png",
-			Banner:   "/assets/slots/" + t + "/banner.jpg",
+			Alias:    t.alias,
+			Image:    "https://placehold.co/400x300/1a1a2e/8b5cf6?text=" + strings.ReplaceAll(t.name, " ", "+"),
+			Banner:   "https://placehold.co/800x400/1a1a2e/8b5cf6?text=" + strings.ReplaceAll(t.name, " ", "+"),
 		})
 		index++
 	}
@@ -61,8 +66,8 @@ func ApiGameList(c *gin.Context) {
 			Title:    gi.Name,
 			Provider: gi.Prov,
 			Alias:    id,
-			Image:    "/assets/slots/" + id + "/icon.png",
-			Banner:   "/assets/slots/" + id + "/banner.jpg",
+			Image:    "https://placehold.co/400x300/1a1a2e/8b5cf6?text=" + strings.ReplaceAll(gi.Name, " ", "+"),
+			Banner:   "https://placehold.co/800x400/1a1a2e/8b5cf6?text=" + strings.ReplaceAll(gi.Name, " ", "+"),
 		})
 		index++
 	}

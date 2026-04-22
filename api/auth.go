@@ -270,13 +270,13 @@ func ApiSignin(c *gin.Context) {
 		return
 	}
 
-	// Проверка пароля/HMAC для существующих пользователей
-	if arg.Secret != "" {
+	// Проверка пароля/HMAC для существующих пользователей (только для не-OAuth)
+	if arg.Secret != "" && !isOAuthSecret(arg.Secret) {
 		if user.Secret != arg.Secret {
 			Ret403(c, ErrNotPass)
 			return
 		}
-	} else {
+	} else if !isOAuthSecret(arg.Secret) {
 		t, err := time.Parse(time.RFC3339, arg.SigTime)
 		if err != nil {
 			Ret403(c, ErrSigTime)

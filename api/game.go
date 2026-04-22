@@ -38,25 +38,6 @@ func ApiGameList(c *gin.Context) {
 	gamelist := make([]gameOut, 0, 256)
 	index := 0
 
-	// Hardcoded test games with correct provider prefix
-	tests := []struct{ name, alias string }{
-		{"Buffalo", "aristocrat/buffalo"},
-		{"Lucky 88", "aristocrat/lucky-88"},
-		{"Queen Of The Nile", "aristocrat/queen-of-the-nile"},
-	}
-	for _, t := range tests {
-		gamelist = append(gamelist, gameOut{
-			ID:       index,
-			GameID:   strings.ReplaceAll(strings.ToLower(t.name), " ", "-"),
-			Title:    t.name,
-			Provider: "Aristocrat",
-			Alias:    t.alias,
-			Image:    "https://placehold.co/400x300/1a1a2e/8b5cf6?text=" + strings.ReplaceAll(t.name, " ", "+"),
-			Banner:   "https://placehold.co/800x400/1a1a2e/8b5cf6?text=" + strings.ReplaceAll(t.name, " ", "+"),
-		})
-		index++
-	}
-
 	for _, gi := range game.InfoMap {
 		id := gi.ID()
 

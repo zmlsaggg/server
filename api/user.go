@@ -247,6 +247,26 @@ func ApiUpdateCurrency(c *gin.Context) {
 	})
 }
 
+// ApiUserSettings returns user settings for the authenticated user
+func ApiUserSettings(c *gin.Context) {
+	user, err := extractAuth(c)
+	if err != nil {
+		Ret401(c, err)
+		return
+	}
+
+	RetOk(c, gin.H{
+		"uid":   user.UID,
+		"email": user.Email,
+		"name":  user.Name,
+		"settings": gin.H{
+			"language": "ru",
+			"currency": "USD",
+			"theme":    "dark",
+		},
+	})
+}
+
 // ApiAddBalance adds balance to user wallet, creates props if not exists
 func ApiAddBalance(c *gin.Context) {
 	var arg struct {

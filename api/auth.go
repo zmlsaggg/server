@@ -333,12 +333,29 @@ func ApiSignup(c *gin.Context) {
 		}
 	}
 
+	// Generate auto username if empty
+	name := arg.Name
+	if name == "" {
+		// Find next available Player number
+		maxNum := 0
+		for _, u := range Users.Items() {
+			if strings.HasPrefix(u.Name, "Player") {
+				var num int
+				fmt.Sscanf(u.Name, "Player%d", &num)
+				if num > maxNum {
+					maxNum = num
+				}
+			}
+		}
+		name = fmt.Sprintf("Player%d", maxNum+1)
+	}
+
 	// Create new user
 	user := &User{
 		UID:    uint64(time.Now().UnixNano()),
 		Email:  email,
 		Secret: arg.Secret,
-		Name:   arg.Name,
+		Name:   name,
 	}
 	user.Init()
 

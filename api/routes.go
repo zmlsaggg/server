@@ -11,7 +11,7 @@ func SetupRouter(r *gin.Engine) {
 		h := c.Writer.Header()
 		h.Set("Access-Control-Allow-Origin", "*")
 		h.Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-		h.Set("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Authorization")
+		h.Set("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Authorization, x-user-id")
 		h.Set("Access-Control-Allow-Credentials", "true")
 
 		if c.Request.Method == http.MethodOptions {
@@ -83,12 +83,20 @@ func SetupRouter(r *gin.Engine) {
 		// Slot game sessions
 		api.POST("/game/new", ApiGameNew)
 		api.POST("/game/join", ApiGameJoin)
-		
+
 		// Original games (Dice, Mines, Crash, etc.)
 		api.POST("/original/new", ApiOriginalNew)
 		api.POST("/original/join", ApiOriginalJoin)
 		api.POST("/original/info", ApiOriginalInfo)
 		api.POST("/original/rtp/get", ApiOriginalRtpGet)
 		api.GET("/original/algs", ApiOriginalAlgs)
+
+		// Giveaway stub (not implemented yet)
+		api.GET("/giveaway/active", func(c *gin.Context) {
+			RetOk(c, gin.H{
+				"active": false,
+				"list":   []interface{}{},
+			})
+		})
 	}
 }

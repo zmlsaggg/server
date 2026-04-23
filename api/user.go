@@ -33,23 +33,30 @@ func ApiUserIs(c *gin.Context) {
 
 	var items []item
 
-	// Try JSON body first
-	if err := c.ShouldBindJSON(&argList); err == nil && len(argList.List) > 0 {
-		items = argList.List
-	} else if err := c.ShouldBindJSON(&argSingle); err == nil {
-		items = []item{{UID: argSingle.UID, Email: argSingle.Email}}
-	} else if err := c.ShouldBindQuery(&argSingle); err == nil {
-		items = []item{{UID: argSingle.UID, Email: argSingle.Email}}
-	} else {
-		// Fallback: try to get from URL param
-		uidStr := c.Param("uid")
-		if uidStr == "" {
-			uidStr = c.Query("uid")
-		}
-		if uidStr != "" {
-			if uid, err := strconv.ParseUint(uidStr, 10, 64); err == nil {
-				items = []item{{UID: uid}}
+	// For GET requests, try query params first
+	if c.Request.Method == "GET" {
+		if err := c.ShouldBindQuery(&argSingle); err == nil && argSingle.UID != 0 {
+			items = []item{{UID: argSingle.UID, Email: argSingle.Email}}
+		} else {
+			// Try URL param
+			uidStr := c.Param("uid")
+			if uidStr == "" {
+				uidStr = c.Query("uid")
 			}
+			if uidStr != "" {
+				if uid, err := strconv.ParseUint(uidStr, 10, 64); err == nil {
+					items = []item{{UID: uid}}
+				}
+			}
+		}
+	} else {
+		// For POST requests, try JSON body
+		if err := c.ShouldBindJSON(&argList); err == nil && len(argList.List) > 0 {
+			items = argList.List
+		} else if err := c.ShouldBindJSON(&argSingle); err == nil {
+			items = []item{{UID: argSingle.UID, Email: argSingle.Email}}
+		} else if err := c.ShouldBindQuery(&argSingle); err == nil {
+			items = []item{{UID: argSingle.UID, Email: argSingle.Email}}
 		}
 	}
 

@@ -14,26 +14,55 @@ const (
 )
 
 func ApiUserIs(c *gin.Context) {
-	var err error
 	type item struct {
 		UID   uint64 `json:"uid"`
 		Email string `json:"email"`
 		Name  string `json:"name"`
 	}
-	var arg struct {
-		List []item `json:"list"`
-	}
-	var ret struct {
+
+	// Try to bind as {list: [...]} first
+	var argList struct {
 		List []item `json:"list"`
 	}
 
-	if err = c.ShouldBindJSON(&arg); err != nil {
-		Ret400(c, err)
+	// Try to bind as single uid query
+	var argSingle struct {
+		UID   uint64 `json:"uid" form:"uid"`
+		Email string `json:"email" form:"email"`
+	}
+
+	var items []item
+
+	// Try JSON body first
+	if err := c.ShouldBindJSON(&argList); err == nil && len(argList.List) > 0 {
+		items = argList.List
+	} else if err := c.ShouldBindJSON(&argSingle); err == nil {
+		items = []item{{UID: argSingle.UID, Email: argSingle.Email}}
+	} else if err := c.ShouldBindQuery(&argSingle); err == nil {
+		items = []item{{UID: argSingle.UID, Email: argSingle.Email}}
+	} else {
+		// Fallback: try to get from URL param
+		uidStr := c.Param("uid")
+		if uidStr == "" {
+			uidStr = c.Query("uid")
+		}
+		if uidStr != "" {
+			if uid, err := strconv.ParseUint(uidStr, 10, 64); err == nil {
+				items = []item{{UID: uid}}
+			}
+		}
+	}
+
+	if len(items) == 0 {
+		RetOk(c, gin.H{"list": []item{}})
 		return
 	}
 
-	ret.List = make([]item, len(arg.List))
-	for i, ai := range arg.List {
+	var ret struct {
+		List []item `json:"list"`
+	}
+	ret.List = make([]item, len(items))
+	for i, ai := range items {
 		var ri item
 		if ai.UID != 0 {
 			if user, ok := Users.Get(ai.UID); ok {
@@ -41,7 +70,7 @@ func ApiUserIs(c *gin.Context) {
 				ri.Email = user.Email
 				ri.Name = user.Name
 			}
-		} else {
+		} else if ai.Email != "" {
 			var email = util.ToLower(ai.Email)
 			for _, user := range Users.Items() {
 				if user.Email == email {

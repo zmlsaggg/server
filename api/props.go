@@ -2,6 +2,8 @@ package api
 
 import (
 	"encoding/xml"
+	"fmt"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	cfg "github.com/slotopol/server/config"
@@ -9,48 +11,76 @@ import (
 
 // Returns all properties for pointed user at pointed club.
 func ApiPropsGet(c *gin.Context) {
-	var err error
 	var ok bool
 	var arg struct {
-		XMLName xml.Name `json:"-" yaml:"-" xml:"arg"`
-		CID     uint64   `json:"cid" yaml:"cid" xml:"cid,attr" form:"cid" binding:"required"`
-		UID     uint64   `json:"uid" yaml:"uid" xml:"uid,attr" form:"uid" binding:"required"`
+		CID uint64 `json:"cid"`
+		UID uint64 `json:"uid"`
 	}
 	var ret struct {
-		XMLName xml.Name `json:"-" yaml:"-" xml:"ret"`
-		Wallet  float64  `json:"wallet" yaml:"wallet" xml:"wallet"`
-		Access  AL       `json:"access" yaml:"access" xml:"access"`
-		MRTP    float64  `json:"mrtp" yaml:"mrtp" xml:"mrtp"`
+		Wallet float64 `json:"wallet"`
+		Access AL      `json:"access"`
+		MRTP   float64 `json:"mrtp"`
 	}
 
-	if err = c.ShouldBind(&arg); err != nil {
-		Ret400(c, err)
+	// Try JSON body first
+	if err := c.ShouldBindJSON(&arg); err != nil {
+		// Try query params
+		arg.CID, _ = strconv.ParseUint(c.Query("cid"), 10, 64)
+		arg.UID, _ = strconv.ParseUint(c.Query("uid"), 10, 64)
+	}
+
+	// Set defaults
+	if arg.CID == 0 {
+		arg.CID = 1
+	}
+	if arg.UID == 0 {
+		// Return defaults for guest (access level 0 = no access)
+		ret.Wallet = 0
+		ret.Access = 0
+		ret.MRTP = 0
+		RetOk(c, ret)
 		return
 	}
 
 	var club *Club
 	if club, ok = Clubs.Get(arg.CID); !ok {
-		Ret404(c, ErrNoClub)
-		return
+		// Auto-create default club
+		cd := ClubData{CID: arg.CID}
+		club = MakeClub(cd)
+		Clubs.Set(arg.CID, club)
 	}
 	_ = club
 
 	var user *User
 	if user, ok = Users.Get(arg.UID); !ok {
-		Ret404(c, ErrNoUser)
-		return
-	}
-
-	var admin, al = GetAdmin(c, arg.CID)
-	if admin != nil && admin != user && al&ALbooker == 0 {
-		Ret403(c, ErrNoAccess)
-		return
+		// Auto-create user with default props
+		user = &User{
+			UID:    arg.UID,
+			Email:  fmt.Sprintf("user_%d@auto.local", arg.UID),
+			Secret: fmt.Sprintf("auto_%d", arg.UID),
+			Name:   fmt.Sprintf("Player_%d", arg.UID),
+		}
+		user.Init()
+		Users.Set(arg.UID, user)
+		// Create default props
+		props := &Props{
+			CID:    arg.CID,
+			UID:    arg.UID,
+			Wallet: 1000,
+			Access: ALmember,
+		}
+		user.props.Set(arg.CID, props)
 	}
 
 	if props, ok := user.props.Get(arg.CID); ok {
 		ret.Wallet = props.Wallet
 		ret.Access = props.Access
 		ret.MRTP = props.MRTP
+	} else {
+		// Create default props if not exists
+		ret.Wallet = 1000
+		ret.Access = ALmember
+		ret.MRTP = 0
 	}
 
 	RetOk(c, ret)
@@ -58,40 +88,61 @@ func ApiPropsGet(c *gin.Context) {
 
 // Returns balance at wallet for pointed user at pointed club.
 func ApiPropsWalletGet(c *gin.Context) {
-	var err error
 	var ok bool
 	var arg struct {
-		XMLName xml.Name `json:"-" yaml:"-" xml:"arg"`
-		CID     uint64   `json:"cid" yaml:"cid" xml:"cid,attr" form:"cid" binding:"required"`
-		UID     uint64   `json:"uid" yaml:"uid" xml:"uid,attr" form:"uid" binding:"required"`
+		CID uint64 `json:"cid"`
+		UID uint64 `json:"uid"`
 	}
 	var ret struct {
-		XMLName xml.Name `json:"-" yaml:"-" xml:"ret"`
-		Wallet  float64  `json:"wallet" yaml:"wallet" xml:"wallet"`
+		Wallet float64 `json:"wallet"`
 	}
 
-	if err = c.ShouldBind(&arg); err != nil {
-		Ret400(c, err)
+	// Try JSON body first
+	if err := c.ShouldBindJSON(&arg); err != nil {
+		// Try query params
+		arg.CID, _ = strconv.ParseUint(c.Query("cid"), 10, 64)
+		arg.UID, _ = strconv.ParseUint(c.Query("uid"), 10, 64)
+	}
+
+	// Set defaults
+	if arg.CID == 0 {
+		arg.CID = 1
+	}
+	if arg.UID == 0 {
+		// Return 0 balance for guest
+		ret.Wallet = 0
+		RetOk(c, ret)
 		return
 	}
 
 	var club *Club
 	if club, ok = Clubs.Get(arg.CID); !ok {
-		Ret404(c, ErrNoClub)
-		return
+		// Auto-create default club
+		cd := ClubData{CID: arg.CID}
+		club = MakeClub(cd)
+		Clubs.Set(arg.CID, club)
 	}
 	_ = club
 
 	var user *User
 	if user, ok = Users.Get(arg.UID); !ok {
-		Ret404(c, ErrNoUser)
-		return
-	}
-
-	var admin, al = GetAdmin(c, arg.CID)
-	if admin != nil && admin != user && al&ALbooker == 0 {
-		Ret403(c, ErrNoAccess)
-		return
+		// Auto-create user with default wallet
+		user = &User{
+			UID:    arg.UID,
+			Email:  fmt.Sprintf("user_%d@auto.local", arg.UID),
+			Secret: fmt.Sprintf("auto_%d", arg.UID),
+			Name:   fmt.Sprintf("Player_%d", arg.UID),
+		}
+		user.Init()
+		Users.Set(arg.UID, user)
+		// Create default props
+		props := &Props{
+			CID:    arg.CID,
+			UID:    arg.UID,
+			Wallet: 1000, // Starting balance
+			Access: ALmember,
+		}
+		user.props.Set(arg.CID, props)
 	}
 
 	ret.Wallet = user.GetWallet(arg.CID)

@@ -279,6 +279,28 @@ func ApiGameLaunch(c *gin.Context) {
 		return
 	}
 
+	// Auto-create club if not exists
+	if _, ok := Clubs.Get(arg.CID); !ok {
+		club := &Club{
+			CID: arg.CID,
+		}
+		Clubs.Set(club.CID, club)
+	}
+
+	// Auto-create user if not exists
+	if _, ok := Users.Get(arg.UID); !ok {
+		user := &User{
+			UID:  arg.UID,
+			Name: fmt.Sprintf("Player%d", arg.UID),
+		}
+		// Initialize props for club
+		user.props.Set(arg.CID, &Props{
+			CID:    arg.CID,
+			Wallet: 1000, // Starting balance
+		})
+		Users.Set(user.UID, user)
+	}
+
 	anygame := maker()
 	gid := StoryCounter.Inc()
 

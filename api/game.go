@@ -230,29 +230,55 @@ func ApiGameInfo(c *gin.Context) {
 }
 
 func ApiGameRtpGet(c *gin.Context) {
-	var arg struct {
-		GID uint64 `json:"gid" form:"gid"`
+	// Try to get from URL param first (new endpoint: /game/rtp/:alias)
+	alias := c.Param("alias")
+
+	// If no alias in URL, try from query/body (old endpoint)
+	if alias == "" {
+		var arg struct {
+			GID uint64 `json:"gid" form:"gid"`
+		}
+		if err := c.ShouldBind(&arg); err == nil && arg.GID > 0 {
+			scene, err := GetScene(arg.GID)
+			if err == nil {
+				alias = scene.Alias
+			}
+		}
 	}
 
-	if err := c.ShouldBind(&arg); err != nil {
-		Ret400(c, err)
-		return
+	// Normalize alias
+	if alias != "" {
+		alias = strings.ToLower(strings.ReplaceAll(alias, "%2f", "-"))
+		alias = strings.ReplaceAll(alias, "/", "-")
+
+		if gi, ok := game.InfoMap[alias]; ok {
+			RetOk(c, gin.H{
+				"mrtp":  GetRTP(nil, nil),
+				"rtp":   gi.FindClosest(96.0),
+				"alias": alias,
+			})
+			return
+		}
 	}
 
-	scene, err := GetScene(arg.GID)
-	if err != nil {
-		Ret404(c, err)
-		return
-	}
+	Ret404(c, "game not found")
+}
 
-	gi, ok := game.InfoMap[scene.Alias]
-	if !ok {
-		Ret404(c, "game not found")
-		return
+// ApiRecentWinners returns recent big wins
+func ApiRecentWinners(c *gin.Context) {
+	// Mock data - in production this should query from database
+	winners := []gin.H{
+		{"id": "1", "username": "Player847", "game": "Mines", "amount": 1250.50, "currency": "USD", "multiplier": 12.5, "time": "2m ago"},
+		{"id": "2", "username": "LuckyOne", "game": "Crash", "amount": 3400.00, "currency": "USD", "multiplier": 34.0, "time": "5m ago"},
+		{"id": "3", "username": "CryptoKing", "game": "Dice", "amount": 890.25, "currency": "USD", "multiplier": 8.9, "time": "8m ago"},
+		{"id": "4", "username": "HighRoller", "game": "Blackjack", "amount": 2500.00, "currency": "USD", "multiplier": 2.5, "time": "12m ago"},
+		{"id": "5", "username": "SlotMaster", "game": "Book of Ra", "amount": 5670.80, "currency": "USD", "multiplier": 56.7, "time": "15m ago"},
+		{"id": "6", "username": "NightOwl", "game": "Mines", "amount": 420.00, "currency": "USD", "multiplier": 4.2, "time": "18m ago"},
 	}
 
 	RetOk(c, gin.H{
-		"mrtp": GetRTP(nil, nil),
-		"rtp":  gi.FindClosest(96.0),
+		"winners": winners,
+		"total":   len(winners),
+		"updated": time.Now().Unix(),
 	})
 }

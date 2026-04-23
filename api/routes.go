@@ -102,5 +102,11 @@ func SetupRouter(r *gin.Engine) {
 				"list":   []interface{}{},
 			})
 		})
+
+		// Recent winners endpoint
+		api.GET("/winners/recent", ApiRecentWinners)
+
+		// RTP endpoint for all games
+		api.GET("/game/rtp/:alias", ApiGameRtpGet)
 	}
 }

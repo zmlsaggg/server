@@ -305,6 +305,13 @@ func ApiGameLaunch(c *gin.Context) {
 	}
 
 	anygame := maker()
+
+	// Verify it's a slot game (not keno or other types)
+	if _, ok := anygame.(slot.SlotGeneric); !ok {
+		Ret400(c, fmt.Errorf("game %s is not a slot machine", alias))
+		return
+	}
+
 	gid := StoryCounter.Inc()
 
 	scene := &Scene{

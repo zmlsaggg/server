@@ -247,6 +247,116 @@ func ApiGameInfo(c *gin.Context) {
 	Ret400(c, "invalid alias")
 }
 
+func ApiGameLaunch(c *gin.Context) {
+	var arg struct {
+		CID   uint64 `json:"cid" form:"cid"`
+		UID   uint64 `json:"uid" form:"uid"`
+		Alias string `json:"alias" form:"alias"`
+	}
+
+	if err := c.ShouldBind(&arg); err != nil {
+		arg.CID, _ = strconv.ParseUint(c.Query("cid"), 10, 64)
+		arg.UID, _ = strconv.ParseUint(c.Query("uid"), 10, 64)
+		arg.Alias = c.Query("alias")
+	}
+
+	if arg.CID == 0 {
+		arg.CID = 1
+	}
+	if arg.UID == 0 {
+		c.String(400, "uid is required")
+		return
+	}
+	if arg.Alias == "" {
+		c.String(400, "alias is required")
+		return
+	}
+
+	alias := util.ToID(arg.Alias)
+	maker, has := game.GameFactory[alias]
+	if !has {
+		c.String(404, "alias not found")
+		return
+	}
+
+	anygame := maker()
+	gid := StoryCounter.Inc()
+
+	scene := &Scene{
+		Story: Story{
+			GID:   gid,
+			CID:   arg.CID,
+			UID:   arg.UID,
+			Alias: alias,
+		},
+		Game: anygame,
+	}
+
+	InitGrid(anygame)
+	Scenes.Set(scene.GID, scene)
+
+	// Return HTML page with game iframe
+	html := fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>%s</title>
+	<style>
+		* { margin: 0; padding: 0; box-sizing: border-box; }
+		body { 
+			background: #1a0a2e; 
+			display: flex; 
+			justify-content: center; 
+			align-items: center; 
+			min-height: 100vh; 
+			font-family: Arial, sans-serif;
+		}
+		.game-container {
+			width: 100%%;
+			max-width: 1200px;
+			height: 100vh;
+			display: flex;
+			flex-direction: column;
+		}
+		.game-header {
+			background: rgba(0,0,0,0.5);
+			padding: 10px 20px;
+			color: white;
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+		}
+		.game-iframe {
+			flex: 1;
+			border: none;
+			width: 100%%;
+		}
+	</style>
+</head>
+<body>
+	<div class="game-container">
+		<div class="game-header">
+			<span>Game: %s</span>
+			<span>GID: %d</span>
+		</div>
+		<iframe class="game-iframe" src="/game/play?gid=%d&uid=%d&cid=%d"></iframe>
+	</div>
+	<script>
+		// Game communication with parent
+		window.addEventListener('message', (event) => {
+			if (event.data.type === 'game:spin') {
+				// Handle spin request
+			}
+		});
+	</script>
+</body>
+</html>`, alias, alias, gid, gid, arg.UID, arg.CID)
+
+	c.Header("Content-Type", "text/html")
+	c.String(200, html)
+}
+
 func ApiGameRtpGet(c *gin.Context) {
 	// Try to get from URL param first (new endpoint: /game/rtp/:alias)
 	alias := c.Param("alias")

@@ -95,13 +95,13 @@ func SetupRouter(r *gin.Engine) {
 		api.POST("/prop/rtp/get", ApiPropsRtpGet)
 		api.POST("/prop/rtp/set", ApiPropsRtpSet)
 
-		// Slot game sessions (require authentication)
-		api.POST("/game/new", Auth(true), ApiGameNew)
-		api.POST("/game/join", Auth(true), ApiGameJoin)
+		// Slot game sessions
+		api.POST("/game/new", ApiGameNew)
+		api.POST("/game/join", ApiGameJoin)
 
-		// Original games (Dice, Mines, Crash, etc.) - require authentication
-		api.POST("/original/new", Auth(true), ApiOriginalNew)
-		api.POST("/original/join", Auth(true), ApiOriginalJoin)
+		// Original games (Dice, Mines, Crash, etc.)
+		api.POST("/original/new", ApiOriginalNew)
+		api.POST("/original/join", ApiOriginalJoin)
 		api.POST("/original/info", ApiOriginalInfo)
 		api.POST("/original/rtp/get", ApiOriginalRtpGet)
 		api.GET("/original/algs", ApiOriginalAlgs)

@@ -297,7 +297,7 @@ func ApiGameLaunch(c *gin.Context) {
 		// Create default props
 		props := &Props{
 			CID:    arg.CID,
-			Wallet: 1000, // Starting balance
+			Wallet: 100000, // Starting balance
 		}
 		user.props.Set(arg.CID, props)
 	}

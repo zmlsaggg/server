@@ -16,21 +16,18 @@ const (
 func ApiUserIs(c *gin.Context) {
 	var err error
 	type item struct {
-		XMLName xml.Name `json:"-" yaml:"-" xml:"user"`
-		UID     uint64   `json:"uid,omitempty" yaml:"uid,omitempty" xml:"uid,attr,omitempty"`
-		Email   string   `json:"email,omitempty" yaml:"email,omitempty" xml:"email,attr,omitempty"`
-		Name    string   `json:"name,omitempty" yaml:"name,omitempty" xml:"name,attr,omitempty"`
+		UID   uint64 `json:"uid"`
+		Email string `json:"email"`
+		Name  string `json:"name"`
 	}
 	var arg struct {
-		XMLName xml.Name `json:"-" yaml:"-" xml:"arg"`
-		List    []item   `json:"list" yaml:"list" xml:"list>user" form:"list" binding:"required"`
+		List []item `json:"list"`
 	}
 	var ret struct {
-		XMLName xml.Name `json:"-" yaml:"-" xml:"ret"`
-		List    []item   `json:"list" yaml:"list" xml:"list>user"`
+		List []item `json:"list"`
 	}
 
-	if err = c.ShouldBind(&arg); err != nil {
+	if err = c.ShouldBindJSON(&arg); err != nil {
 		Ret400(c, err)
 		return
 	}

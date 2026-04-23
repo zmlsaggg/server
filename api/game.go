@@ -568,18 +568,6 @@ func ApiGameLaunch(c *gin.Context) {
 	c.String(200, html)
 }
 
-// ApiUserSettingsSave - stub for user settings save
-func ApiUserSettingsSave(c *gin.Context) {
-	RetOk(c, gin.H{"success": true})
-}
-
-// ApiRecentWinners - stub for recent winners endpoint
-func ApiRecentWinners(c *gin.Context) {
-	RetOk(c, gin.H{
-		"list": []interface{}{},
-	})
-}
-
 func ApiGameRtpGet(c *gin.Context) {
 	// Try to get from URL param first (new endpoint: /game/rtp/:alias)
 	alias := c.Param("alias")

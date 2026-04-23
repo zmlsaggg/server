@@ -14,7 +14,7 @@ COPY . .
 
 # tidy принудительно вычистит лишние импорты перед сборкой
 RUN go mod tidy
-RUN go build -v -o /go/bin/app main.go
+RUN go build -tags full -v -o /go/bin/app main.go
 
 # Подготовка конфигов
 RUN mkdir -p /go/bin/config && \

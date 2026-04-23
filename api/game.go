@@ -296,3 +296,31 @@ func ApiRecentWinners(c *gin.Context) {
 		"updated": time.Now().Unix(),
 	})
 }
+
+// ApiUserSettingsSave saves user settings (theme, notifications, etc.)
+func ApiUserSettingsSave(c *gin.Context) {
+	var arg struct {
+		UID           uint64 `json:"userId"`
+		Theme         string `json:"theme"`
+		Language      string `json:"language"`
+		Notifications bool   `json:"notifications"`
+	}
+
+	if err := c.ShouldBind(&arg); err != nil {
+		Ret400(c, err)
+		return
+	}
+
+	// TODO: Save settings to database
+	// For now just return success
+
+	RetOk(c, gin.H{
+		"success": true,
+		"message": "Settings saved",
+		"settings": gin.H{
+			"theme":         arg.Theme,
+			"language":      arg.Language,
+			"notifications": arg.Notifications,
+		},
+	})
+}

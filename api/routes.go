@@ -68,6 +68,7 @@ func SetupRouter(r *gin.Engine) {
 			RetOk(c, gin.H{"success": true, "message": "Promo activated"})
 		})
 		api.GET("/user/settings", ApiUserSettings)
+		api.POST("/user/settings", ApiUserSettingsSave)
 
 		api.GET("/slots/game/:alias", ApiGameInfo)
 		api.GET("/slots/load", ApiGameList)

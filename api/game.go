@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -11,6 +12,7 @@ import (
 
 	cfg "github.com/slotopol/server/config"
 	"github.com/slotopol/server/game"
+	"github.com/slotopol/server/game/slot"
 	"github.com/slotopol/server/util"
 )
 
@@ -318,6 +320,23 @@ func ApiGameLaunch(c *gin.Context) {
 	InitGrid(anygame)
 	Scenes.Set(scene.GID, scene)
 
+	// Get real grid from game
+	var gridJSON = "null"
+	if grider, ok := anygame.(slot.Grider); ok {
+		sx, sy := grider.Dim()
+		grid := make([][]int, sy)
+		for y := slot.Pos(1); y <= sy; y++ {
+			row := make([]int, sx)
+			for x := slot.Pos(1); x <= sx; x++ {
+				row[x-1] = int(grider.At(x, y))
+			}
+			grid[y-1] = row
+		}
+		if b, err := json.Marshal(grid); err == nil {
+			gridJSON = string(b)
+		}
+	}
+
 	// Return HTML page with direct game UI (no nested iframe)
 	html := fmt.Sprintf(`<!DOCTYPE html>
 <html>
@@ -433,23 +452,7 @@ func ApiGameLaunch(c *gin.Context) {
 	</div>
 	<div class="game-container">
 		<div class="win-message" id="winMsg"></div>
-		<div class="reels" id="reels">
-			<div class="reel" id="r0">7</div>
-			<div class="reel" id="r1">7</div>
-			<div class="reel" id="r2">7</div>
-			<div class="reel" id="r3">7</div>
-			<div class="reel" id="r4">7</div>
-			<div class="reel" id="r5">7</div>
-			<div class="reel" id="r6">7</div>
-			<div class="reel" id="r7">7</div>
-			<div class="reel" id="r8">7</div>
-			<div class="reel" id="r9">7</div>
-			<div class="reel" id="r10">7</div>
-			<div class="reel" id="r11">7</div>
-			<div class="reel" id="r12">7</div>
-			<div class="reel" id="r13">7</div>
-			<div class="reel" id="r14">7</div>
-		</div>
+		<div class="reels" id="reels"></div>
 		<div class="controls">
 			<div class="info">
 				<div>Bet: <span id="bet">10</span></div>
@@ -465,10 +468,31 @@ func ApiGameLaunch(c *gin.Context) {
 		const alias = "%s";
 		const API_BASE = window.location.origin + "/api";
 		
-		const symbols = ["7", "🍒", "🍋", "🍊", "🍇", "💎", "⭐"];
+		const symbols = ["7", "🍒", "🍋", "🍊", "🍇", "💎", "⭐", "🔔", "💰", "🎰", "🍀", "🌟", "💎", "👑", "🏆"];
+		const initialGrid = %s; // Real grid from game
+		const rows = initialGrid ? initialGrid.length : 3;
+		const cols = initialGrid && initialGrid[0] ? initialGrid[0].length : 5;
 		
 		function getReelSymbol(index) {
 			return document.getElementById('r' + index);
+		}
+		
+		function renderGrid(grid) {
+			const reels = document.getElementById('reels');
+			reels.innerHTML = '';
+			reels.style.gridTemplateColumns = 'repeat(' + grid[0].length + ', 80px)';
+			reels.style.gridTemplateRows = 'repeat(' + grid.length + ', 80px)';
+			for(let row=0; row<grid.length; row++) {
+				for(let col=0; col<grid[row].length; col++) {
+					const idx = row * grid[0].length + col;
+					const val = grid[row][col];
+					const div = document.createElement('div');
+					div.className = 'reel';
+					div.id = 'r' + idx;
+					div.textContent = symbols[val %% symbols.length];
+					reels.appendChild(div);
+				}
+			}
 		}
 		
 		async function spin() {
@@ -480,10 +504,14 @@ func ApiGameLaunch(c *gin.Context) {
 			winMsg.textContent = '';
 			btn.textContent = 'Spinning...';
 			
-			// Animation
-			for(let i=0; i<15; i++) {
-				getReelSymbol(i).classList.add('spinning');
-				getReelSymbol(i).textContent = symbols[Math.floor(Math.random() * symbols.length)];
+			// Animation - spin all reels
+			const totalReels = rows * cols;
+			for(let i=0; i<totalReels; i++) {
+				const el = getReelSymbol(i);
+				if(el) {
+					el.classList.add('spinning');
+					el.textContent = symbols[Math.floor(Math.random() * symbols.length)];
+				}
 			}
 			
 			try {
@@ -496,12 +524,15 @@ func ApiGameLaunch(c *gin.Context) {
 				
 				if(data.grid) {
 					// Update reels with result
-					for(let row=0; row<3; row++) {
-						for(let col=0; col<5; col++) {
-							const idx = row*5 + col;
+					for(let row=0; row<data.grid.length; row++) {
+						for(let col=0; col<data.grid[row].length; col++) {
+							const idx = row*data.grid[0].length + col;
 							const val = data.grid[row][col];
-							getReelSymbol(idx).textContent = symbols[val %% symbols.length];
-							getReelSymbol(idx).classList.remove('spinning');
+							const el = getReelSymbol(idx);
+							if(el) {
+								el.textContent = symbols[val %% symbols.length];
+								el.classList.remove('spinning');
+							}
 						}
 					}
 					
@@ -525,13 +556,28 @@ func ApiGameLaunch(c *gin.Context) {
 		}
 		
 		// Initialize
-		console.log('Game loaded:', alias, 'GID:', gid, 'UID:', uid);
+		if(initialGrid) {
+			renderGrid(initialGrid);
+		}
+		console.log('Game loaded:', alias, 'GID:', gid, 'UID:', uid, 'Grid:', initialGrid);
 	</script>
 </body>
-</html>`, alias, alias, gid, arg.UID, gid, arg.UID, arg.CID, alias)
+</html>`, alias, alias, gid, arg.UID, gid, arg.UID, arg.CID, alias, gridJSON)
 
 	c.Header("Content-Type", "text/html")
 	c.String(200, html)
+}
+
+// ApiUserSettingsSave - stub for user settings save
+func ApiUserSettingsSave(c *gin.Context) {
+	RetOk(c, gin.H{"success": true})
+}
+
+// ApiRecentWinners - stub for recent winners endpoint
+func ApiRecentWinners(c *gin.Context) {
+	RetOk(c, gin.H{
+		"list": []interface{}{},
+	})
 }
 
 func ApiGameRtpGet(c *gin.Context) {

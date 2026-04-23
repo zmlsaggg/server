@@ -257,7 +257,7 @@ func ApiGameRtpGet(c *gin.Context) {
 
 		if gi, ok := game.InfoMap[alias]; ok {
 			RetOk(c, gin.H{
-				"mrtp":  GetRTP(nil, nil),
+				"mrtp":  cfg.DefMRTP, // Use default RTP instead of GetRTP(nil,nil)
 				"rtp":   gi.FindClosest(96.0),
 				"alias": alias,
 			})
@@ -267,7 +267,7 @@ func ApiGameRtpGet(c *gin.Context) {
 		// Fallback: return mock RTP for games not in InfoMap
 		fmt.Printf("Game not found in InfoMap, returning mock RTP for: %s\n", alias)
 		RetOk(c, gin.H{
-			"mrtp":  GetRTP(nil, nil),
+			"mrtp":  cfg.DefMRTP, // Use default RTP
 			"rtp":   96.0, // Default mock RTP
 			"alias": alias,
 			"mock":  true,

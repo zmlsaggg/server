@@ -341,8 +341,9 @@ func ApiGameLaunch(c *gin.Context) {
 			display: flex;
 			align-items: center;
 			justify-content: center;
-			font-size: 40px;
+			font-size: 36px;
 			transition: all 0.3s;
+			min-height: 80px;
 		}
 		.reel.spinning {
 			animation: pulse 0.5s infinite;
@@ -354,25 +355,39 @@ func ApiGameLaunch(c *gin.Context) {
 		}
 		.controls {
 			display: flex;
-			gap: 15px;
+			gap: 20px;
 			align-items: center;
 			flex-wrap: wrap;
 			justify-content: center;
+			padding: 20px;
+			background: rgba(0,0,0,0.3);
+			border-radius: 12px;
+			margin-top: 20px;
 		}
 		button {
 			background: #8b5cf6;
 			color: white;
 			border: none;
-			padding: 15px 40px;
-			font-size: 18px;
-			border-radius: 8px;
+			padding: 20px 50px;
+			font-size: 20px;
+			border-radius: 10px;
 			cursor: pointer;
-			transition: background 0.3s;
+			transition: all 0.3s;
+			position: relative;
+			z-index: 100;
 		}
-		button:hover { background: #7c3aed; }
-		button:disabled { background: #4b5563; cursor: not-allowed; }
-		button.spin { background: #ef4444; font-weight: bold; }
-		button.spin:hover { background: #dc2626; }
+		button:hover { background: #7c3aed; transform: scale(1.05); }
+		button:active { transform: scale(0.95); }
+		button:disabled { background: #4b5563; cursor: not-allowed; transform: none; }
+		button.spin { 
+			background: linear-gradient(135deg, #ef4444 0%%, #dc2626 100%%); 
+			font-weight: bold;
+			box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
+		}
+		button.spin:hover { 
+			background: linear-gradient(135deg, #dc2626 0%%, #b91c1c 100%%);
+			box-shadow: 0 6px 20px rgba(239, 68, 68, 0.6);
+		}
 		.info {
 			background: rgba(0,0,0,0.3);
 			padding: 10px 20px;
@@ -417,7 +432,7 @@ func ApiGameLaunch(c *gin.Context) {
 				<div>Bet: <span id="bet">10</span></div>
 				<div>Win: <span id="win">0</span></div>
 			</div>
-			<button class="spin" id="spinBtn" onclick="spin()">SPIN</button>
+			<button type="button" class="spin" id="spinBtn" onclick="spin()">🎰 SPIN 🎰</button>
 		</div>
 	</div>
 	<script>
@@ -434,10 +449,13 @@ func ApiGameLaunch(c *gin.Context) {
 		}
 		
 		async function spin() {
+			console.log('SPIN clicked');
 			const btn = document.getElementById('spinBtn');
 			const winMsg = document.getElementById('winMsg');
+			if(!btn || btn.disabled) return;
 			btn.disabled = true;
 			winMsg.textContent = '';
+			btn.textContent = 'Spinning...';
 			
 			// Animation
 			for(let i=0; i<15; i++) {
@@ -480,6 +498,7 @@ func ApiGameLaunch(c *gin.Context) {
 			}
 			
 			btn.disabled = false;
+			btn.textContent = '🎰 SPIN 🎰';
 		}
 		
 		// Initialize

@@ -64,6 +64,7 @@ func SetupRouter(r *gin.Engine) {
 
 		// User endpoints (needed by frontend)
 		api.POST("/user", ApiUserIs)
+		api.GET("/user/:uid", ApiUserGet)
 		api.POST("/update-currency", ApiUpdateCurrency)
 		api.POST("/user/promo-activate", func(c *gin.Context) {
 			RetOk(c, gin.H{"success": true, "message": "Promo activated"})

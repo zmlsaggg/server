@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/xml"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	cfg "github.com/slotopol/server/config"
@@ -58,6 +59,43 @@ func ApiUserIs(c *gin.Context) {
 	}
 
 	RetOk(c, ret)
+}
+
+// ApiUserGet returns user data for a single UID (GET endpoint for frontend)
+func ApiUserGet(c *gin.Context) {
+	uidStr := c.Param("uid")
+	if uidStr == "" {
+		uidStr = c.Query("uid")
+	}
+
+	uid, err := strconv.ParseUint(uidStr, 10, 64)
+	if err != nil {
+		Ret400(c, err)
+		return
+	}
+
+	var user *User
+	var ok bool
+	if user, ok = Users.Get(uid); !ok {
+		// Try to load from database
+		session := cfg.XormStorage.NewSession()
+		defer session.Close()
+
+		user = &User{UID: uid}
+		if has, err := session.Get(user); err != nil || !has {
+			Ret404(c, ErrNoUser)
+			return
+		}
+		// Add to cache
+		Users.Set(uid, user)
+	}
+
+	RetOk(c, gin.H{
+		"uid":     user.UID,
+		"email":   user.Email,
+		"name":    user.Name,
+		"balance": user.GetWallet(1), // Default CID=1
+	})
 }
 
 // Changes 'Name' of given user.

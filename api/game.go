@@ -2,7 +2,6 @@ package api
 
 import (
 	"bytes"
-	"encoding/xml"
 	"fmt"
 	"strings"
 	"time"
@@ -77,10 +76,9 @@ func ApiGameNew(c *gin.Context) {
 	var ok bool
 
 	var arg struct {
-		XMLName xml.Name `json:"-" xml:"arg"`
-		CID     uint64   `json:"cid" form:"cid" binding:"required"`
-		UID     uint64   `json:"uid" form:"uid" binding:"required"`
-		Alias   string   `json:"alias" form:"alias" binding:"required"`
+		CID   uint64 `json:"cid" binding:"required"`
+		UID   uint64 `json:"uid" binding:"required"`
+		Alias string `json:"alias" binding:"required"`
 	}
 
 	if err = c.ShouldBind(&arg); err != nil {
@@ -268,7 +266,7 @@ func ApiGameRtpGet(c *gin.Context) {
 		fmt.Printf("Game not found in InfoMap, returning mock RTP for: %s\n", alias)
 		RetOk(c, gin.H{
 			"mrtp":  cfg.DefMRTP, // Use default RTP
-			"rtp":   96.0, // Default mock RTP
+			"rtp":   96.0,        // Default mock RTP
 			"alias": alias,
 			"mock":  true,
 		})

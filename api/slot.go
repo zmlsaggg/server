@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"encoding/xml"
+	"fmt"
 	"log"
 	"math/rand/v2"
 	"strconv"
@@ -275,6 +276,7 @@ func ApiSlotSpin(c *gin.Context) {
 	}
 
 	var admin, al = GetAdmin(c, scene.CID)
+	fmt.Printf("DEBUG: admin=%v, al=%d, scene.UID=%d\n", admin != nil, al, scene.UID)
 	if admin != nil && admin.UID != scene.UID && al&ALdealer == 0 {
 		Ret403(c, ErrNoAccess)
 		return
@@ -285,6 +287,8 @@ func ApiSlotSpin(c *gin.Context) {
 		Ret500(c, ErrNoProps)
 		return
 	}
+
+	fmt.Printf("DEBUG: Spin GID=%d UID=%d CID=%d Bet=%f Wallet=%f\n", arg.GID, scene.UID, scene.CID, arg.Bet, props.Wallet)
 
 	if arg.Bet != 0 {
 		if err = game.SetBet(arg.Bet); err != nil {
@@ -302,7 +306,9 @@ func ApiSlotSpin(c *gin.Context) {
 	var cost float64
 	if !game.FreeMode() {
 		cost = game.Cost()
+		fmt.Printf("DEBUG: cost=%f wallet=%f freemode=%v\n", cost, props.Wallet, game.FreeMode())
 		if props.Wallet < cost {
+			fmt.Printf("DEBUG: No money - wallet=%f < cost=%f\n", props.Wallet, cost)
 			Ret403(c, ErrNoMoney)
 			return
 		}

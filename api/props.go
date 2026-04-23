@@ -41,8 +41,8 @@ func ApiPropsGet(c *gin.Context) {
 		return
 	}
 
-	var admin, al = MustAdmin(c, arg.CID)
-	if admin != user && al&ALbooker == 0 {
+	var admin, al = GetAdmin(c, arg.CID)
+	if admin != nil && admin != user && al&ALbooker == 0 {
 		Ret403(c, ErrNoAccess)
 		return
 	}
@@ -88,8 +88,8 @@ func ApiPropsWalletGet(c *gin.Context) {
 		return
 	}
 
-	var admin, al = MustAdmin(c, arg.CID)
-	if admin != user && al&ALbooker == 0 {
+	var admin, al = GetAdmin(c, arg.CID)
+	if admin != nil && admin != user && al&ALbooker == 0 {
 		Ret403(c, ErrNoAccess)
 		return
 	}

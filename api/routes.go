@@ -46,6 +46,7 @@ func SetupRouter(r *gin.Engine) {
 	r.GET("/game/algs", ApiGameAlgs)
 
 	api := r.Group("/api")
+	api.Use(Auth(false))
 	{
 		// Auth routes (ДОБАВЛЕНО)
 		api.POST("/signin", ApiSignin)
@@ -71,7 +72,6 @@ func SetupRouter(r *gin.Engine) {
 		api.POST("/user/settings", ApiUserSettingsSave)
 
 		api.GET("/slots/game/:alias", ApiGameInfo)
-		api.GET("/slots/load", ApiGameList)
 		api.POST("/slots/spin", ApiSlotSpin)
 
 		slots := api.Group("/slots")
@@ -84,6 +84,15 @@ func SetupRouter(r *gin.Engine) {
 			slots.POST("/doubleup", ApiSlotDoubleup)
 			slots.POST("/collect", ApiSlotCollect)
 		}
+
+		// Props endpoints
+		api.POST("/prop/get", ApiPropsGet)
+		api.POST("/prop/wallet/get", ApiPropsWalletGet)
+		api.POST("/prop/wallet/add", ApiPropsWalletAdd)
+		api.POST("/prop/al/get", ApiPropsAlGet)
+		api.POST("/prop/al/set", ApiPropsAlSet)
+		api.POST("/prop/rtp/get", ApiPropsRtpGet)
+		api.POST("/prop/rtp/set", ApiPropsRtpSet)
 
 		// Slot game sessions
 		api.POST("/game/new", ApiGameNew)

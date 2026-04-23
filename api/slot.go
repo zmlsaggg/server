@@ -42,8 +42,8 @@ func ApiSlotBetGet(c *gin.Context) {
 		return
 	}
 
-	var admin, al = MustAdmin(c, scene.CID)
-	if admin.UID != scene.UID && al&ALdealer == 0 {
+	var admin, al = GetAdmin(c, scene.CID)
+	if admin != nil && admin.UID != scene.UID && al&ALdealer == 0 {
 		Ret403(c, ErrNoAccess)
 		return
 	}
@@ -79,8 +79,8 @@ func ApiSlotBetSet(c *gin.Context) {
 		return
 	}
 
-	var admin, al = MustAdmin(c, scene.CID)
-	if admin.UID != scene.UID && al&ALdealer == 0 {
+	var admin, al = GetAdmin(c, scene.CID)
+	if admin != nil && admin.UID != scene.UID && al&ALdealer == 0 {
 		Ret403(c, ErrNoAccess)
 		return
 	}
@@ -122,8 +122,8 @@ func ApiSlotSelGet(c *gin.Context) {
 		return
 	}
 
-	var admin, al = MustAdmin(c, scene.CID)
-	if admin.UID != scene.UID && al&ALdealer == 0 {
+	var admin, al = GetAdmin(c, scene.CID)
+	if admin != nil && admin.UID != scene.UID && al&ALdealer == 0 {
 		Ret403(c, ErrNoAccess)
 		return
 	}
@@ -159,8 +159,8 @@ func ApiSlotSelSet(c *gin.Context) {
 		return
 	}
 
-	var admin, al = MustAdmin(c, scene.CID)
-	if admin.UID != scene.UID && al&ALdealer == 0 {
+	var admin, al = GetAdmin(c, scene.CID)
+	if admin != nil && admin.UID != scene.UID && al&ALdealer == 0 {
 		Ret403(c, ErrNoAccess)
 		return
 	}
@@ -199,8 +199,8 @@ func ApiSlotModeSet(c *gin.Context) {
 		return
 	}
 
-	var admin, al = MustAdmin(c, scene.CID)
-	if admin.UID != scene.UID && al&ALdealer == 0 {
+	var admin, al = GetAdmin(c, scene.CID)
+	if admin != nil && admin.UID != scene.UID && al&ALdealer == 0 {
 		Ret403(c, ErrNoAccess)
 		return
 	}
@@ -260,8 +260,8 @@ func ApiSlotSpin(c *gin.Context) {
 		return
 	}
 
-	var admin, al = MustAdmin(c, scene.CID)
-	if admin.UID != scene.UID && al&ALdealer == 0 {
+	var admin, al = GetAdmin(c, scene.CID)
+	if admin != nil && admin.UID != scene.UID && al&ALdealer == 0 {
 		Ret403(c, ErrNoAccess)
 		return
 	}
@@ -434,8 +434,8 @@ func ApiSlotDoubleup(c *gin.Context) {
 		return
 	}
 
-	var admin, al = MustAdmin(c, scene.CID)
-	if admin.UID != scene.UID && al&ALdealer == 0 {
+	var admin, al = GetAdmin(c, scene.CID)
+	if admin != nil && admin.UID != scene.UID && al&ALdealer == 0 {
 		Ret403(c, ErrNoAccess)
 		return
 	}
@@ -540,8 +540,8 @@ func ApiSlotCollect(c *gin.Context) {
 		return
 	}
 
-	var admin, al = MustAdmin(c, scene.CID)
-	if admin.UID != scene.UID && al&ALdealer == 0 {
+	var admin, al = GetAdmin(c, scene.CID)
+	if admin != nil && admin.UID != scene.UID && al&ALdealer == 0 {
 		Ret403(c, ErrNoAccess)
 		return
 	}

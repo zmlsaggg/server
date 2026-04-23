@@ -28,9 +28,9 @@ func ApiOriginalNew(c *gin.Context) {
 	var arg struct {
 		XMLName    xml.Name `json:"-" yaml:"-" xml:"arg"`
 		UID        uint64   `json:"uid" yaml:"uid" xml:"uid,attr" form:"uid" binding:"required"`
-		CID        uint64   `json:"cid" yaml:"cid" xml:"cid,attr" form:"cid" binding:"required"`
+		CID        uint64   `json:"cid" yaml:"cid" xml:"cid,attr" form:"cid"`
 		Game       string   `json:"game" yaml:"game" xml:"game,attr" form:"game" binding:"required"`
-		Bet        float64  `json:"bet" yaml:"bet" xml:"bet,attr" form:"bet" binding:"required"`
+		Bet        float64  `json:"bet" yaml:"bet" xml:"bet,attr" form:"bet"`
 		ClientSeed string   `json:"client_seed" yaml:"client_seed" xml:"client_seed,attr" form:"client_seed"`
 	}
 	var ret struct {
@@ -49,6 +49,14 @@ func ApiOriginalNew(c *gin.Context) {
 	if err = c.ShouldBind(&arg); err != nil {
 		Ret400(c, AEC_original_new_nobind)
 		return
+	}
+
+	// Set defaults for optional fields
+	if arg.CID == 0 {
+		arg.CID = 1
+	}
+	if arg.Bet == 0 {
+		arg.Bet = 10
 	}
 
 	// Validate user (auto-create if not found for smoother UX)

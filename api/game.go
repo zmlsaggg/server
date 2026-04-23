@@ -251,6 +251,10 @@ func ApiGameRtpGet(c *gin.Context) {
 		alias = strings.ToLower(strings.ReplaceAll(alias, "%2f", "-"))
 		alias = strings.ReplaceAll(alias, "/", "-")
 
+		// Log for debugging
+		fmt.Printf("RTP request for alias: %s (normalized: %s)\n", c.Param("alias"), alias)
+		fmt.Printf("Available games in InfoMap: %d\n", len(game.InfoMap))
+
 		if gi, ok := game.InfoMap[alias]; ok {
 			RetOk(c, gin.H{
 				"mrtp":  GetRTP(nil, nil),
@@ -259,6 +263,16 @@ func ApiGameRtpGet(c *gin.Context) {
 			})
 			return
 		}
+
+		// Fallback: return mock RTP for games not in InfoMap
+		fmt.Printf("Game not found in InfoMap, returning mock RTP for: %s\n", alias)
+		RetOk(c, gin.H{
+			"mrtp":  GetRTP(nil, nil),
+			"rtp":   96.0, // Default mock RTP
+			"alias": alias,
+			"mock":  true,
+		})
+		return
 	}
 
 	Ret404(c, "game not found")

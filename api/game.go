@@ -295,7 +295,7 @@ func ApiGameLaunch(c *gin.Context) {
 	InitGrid(anygame)
 	Scenes.Set(scene.GID, scene)
 
-	// Return HTML page with game iframe
+	// Return HTML page with direct game UI (no nested iframe)
 	html := fmt.Sprintf(`<!DOCTYPE html>
 <html>
 <head>
@@ -306,52 +306,187 @@ func ApiGameLaunch(c *gin.Context) {
 		* { margin: 0; padding: 0; box-sizing: border-box; }
 		body { 
 			background: #1a0a2e; 
-			display: flex; 
-			justify-content: center; 
-			align-items: center; 
-			min-height: 100vh; 
+			color: white;
 			font-family: Arial, sans-serif;
-		}
-		.game-container {
-			width: 100%%;
-			max-width: 1200px;
-			height: 100vh;
 			display: flex;
 			flex-direction: column;
+			min-height: 100vh;
 		}
 		.game-header {
 			background: rgba(0,0,0,0.5);
-			padding: 10px 20px;
-			color: white;
+			padding: 15px 20px;
 			display: flex;
 			justify-content: space-between;
 			align-items: center;
 		}
-		.game-iframe {
+		.game-container {
 			flex: 1;
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			padding: 20px;
+		}
+		.reels {
+			display: grid;
+			grid-template-columns: repeat(5, 80px);
+			grid-template-rows: repeat(3, 80px);
+			gap: 5px;
+			margin-bottom: 30px;
+		}
+		.reel {
+			background: linear-gradient(135deg, #2d1b4e 0%%, #1a0a2e 100%%);
+			border: 2px solid #8b5cf6;
+			border-radius: 8px;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			font-size: 40px;
+			transition: all 0.3s;
+		}
+		.reel.spinning {
+			animation: pulse 0.5s infinite;
+		}
+		@keyframes pulse {
+			0%% { border-color: #8b5cf6; }
+			50%% { border-color: #fbbf24; }
+			100%% { border-color: #8b5cf6; }
+		}
+		.controls {
+			display: flex;
+			gap: 15px;
+			align-items: center;
+			flex-wrap: wrap;
+			justify-content: center;
+		}
+		button {
+			background: #8b5cf6;
+			color: white;
 			border: none;
-			width: 100%%;
+			padding: 15px 40px;
+			font-size: 18px;
+			border-radius: 8px;
+			cursor: pointer;
+			transition: background 0.3s;
+		}
+		button:hover { background: #7c3aed; }
+		button:disabled { background: #4b5563; cursor: not-allowed; }
+		button.spin { background: #ef4444; font-weight: bold; }
+		button.spin:hover { background: #dc2626; }
+		.info {
+			background: rgba(0,0,0,0.3);
+			padding: 10px 20px;
+			border-radius: 8px;
+			text-align: center;
+		}
+		.win-message {
+			color: #fbbf24;
+			font-size: 24px;
+			font-weight: bold;
+			margin-bottom: 20px;
+			min-height: 30px;
 		}
 	</style>
 </head>
 <body>
+	<div class="game-header">
+		<span>Game: %s</span>
+		<span>GID: %d | UID: %d</span>
+	</div>
 	<div class="game-container">
-		<div class="game-header">
-			<span>Game: %s</span>
-			<span>GID: %d</span>
+		<div class="win-message" id="winMsg"></div>
+		<div class="reels" id="reels">
+			<div class="reel" id="r0">7</div>
+			<div class="reel" id="r1">7</div>
+			<div class="reel" id="r2">7</div>
+			<div class="reel" id="r3">7</div>
+			<div class="reel" id="r4">7</div>
+			<div class="reel" id="r5">7</div>
+			<div class="reel" id="r6">7</div>
+			<div class="reel" id="r7">7</div>
+			<div class="reel" id="r8">7</div>
+			<div class="reel" id="r9">7</div>
+			<div class="reel" id="r10">7</div>
+			<div class="reel" id="r11">7</div>
+			<div class="reel" id="r12">7</div>
+			<div class="reel" id="r13">7</div>
+			<div class="reel" id="r14">7</div>
 		</div>
-		<iframe class="game-iframe" src="/game/play?gid=%d&uid=%d&cid=%d"></iframe>
+		<div class="controls">
+			<div class="info">
+				<div>Bet: <span id="bet">10</span></div>
+				<div>Win: <span id="win">0</span></div>
+			</div>
+			<button class="spin" id="spinBtn" onclick="spin()">SPIN</button>
+		</div>
 	</div>
 	<script>
-		// Game communication with parent
-		window.addEventListener('message', (event) => {
-			if (event.data.type === 'game:spin') {
-				// Handle spin request
+		const gid = %d;
+		const uid = %d;
+		const cid = %d;
+		const alias = "%s";
+		const API_BASE = window.location.origin + "/api";
+		
+		const symbols = ["7", "🍒", "🍋", "🍊", "🍇", "💎", "⭐"];
+		
+		function getReelSymbol(index) {
+			return document.getElementById('r' + index);
+		}
+		
+		async function spin() {
+			const btn = document.getElementById('spinBtn');
+			const winMsg = document.getElementById('winMsg');
+			btn.disabled = true;
+			winMsg.textContent = '';
+			
+			// Animation
+			for(let i=0; i<15; i++) {
+				getReelSymbol(i).classList.add('spinning');
+				getReelSymbol(i).textContent = symbols[Math.floor(Math.random() * symbols.length)];
 			}
-		});
+			
+			try {
+				const res = await fetch(API_BASE + '/slots/spin', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ gid, uid, cid, bet: 10 })
+				});
+				const data = await res.json();
+				
+				if(data.grid) {
+					// Update reels with result
+					for(let row=0; row<3; row++) {
+						for(let col=0; col<5; col++) {
+							const idx = row*5 + col;
+							const val = data.grid[row][col];
+							getReelSymbol(idx).textContent = symbols[val %% symbols.length];
+							getReelSymbol(idx).classList.remove('spinning');
+						}
+					}
+					
+					if(data.gain > 0) {
+						winMsg.textContent = 'WIN: ' + data.gain + ' coins!';
+						document.getElementById('win').textContent = data.gain;
+					}
+					
+					if(data.wallet !== undefined) {
+						// Update parent window with new balance
+						window.parent.postMessage({ type: 'balance', value: data.wallet }, '*');
+					}
+				}
+			} catch(e) {
+				console.error('Spin error:', e);
+				winMsg.textContent = 'Error: ' + e.message;
+			}
+			
+			btn.disabled = false;
+		}
+		
+		// Initialize
+		console.log('Game loaded:', alias, 'GID:', gid, 'UID:', uid);
 	</script>
 </body>
-</html>`, alias, alias, gid, gid, arg.UID, arg.CID)
+</html>`, alias, alias, gid, arg.UID, gid, arg.UID, arg.CID, alias)
 
 	c.Header("Content-Type", "text/html")
 	c.String(200, html)

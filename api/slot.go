@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	"log"
 	"math/rand/v2"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 
@@ -18,16 +19,29 @@ func ApiSlotBetGet(c *gin.Context) {
 	var err error
 	var ok bool
 	var arg struct {
-		XMLName xml.Name `json:"-" yaml:"-" xml:"arg"`
-		GID     uint64   `json:"gid" yaml:"gid" xml:"gid,attr" form:"gid" binding:"required"`
+		GID uint64 `json:"gid"`
+		UID uint64 `json:"uid"`
+		CID uint64 `json:"cid"`
 	}
 	var ret struct {
-		XMLName xml.Name `json:"-" yaml:"-" xml:"ret"`
-		Bet     float64  `json:"bet" yaml:"bet" xml:"bet"`
+		Bet float64 `json:"bet"`
 	}
 
-	if err = c.ShouldBind(&arg); err != nil {
-		Ret400(c, err)
+	if err = c.ShouldBindJSON(&arg); err != nil {
+		// Try query params
+		arg.GID, _ = strconv.ParseUint(c.Query("gid"), 10, 64)
+		arg.UID, _ = strconv.ParseUint(c.Query("uid"), 10, 64)
+		arg.CID, _ = strconv.ParseUint(c.Query("cid"), 10, 64)
+		if arg.GID == 0 && arg.UID == 0 {
+			Ret400(c, err)
+			return
+		}
+	}
+
+	// If no GID provided but UID and CID provided, return default bet
+	if arg.GID == 0 {
+		ret.Bet = 10 // Default bet
+		RetOk(c, ret)
 		return
 	}
 

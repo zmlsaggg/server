@@ -119,5 +119,37 @@ func SetupRouter(r *gin.Engine) {
 
 		// RTP endpoint for all games
 		api.GET("/game/rtp/:alias", ApiGameRtpGet)
+
+		// Admin endpoints (stubs for frontend compatibility)
+		api.POST("/admin/login", func(c *gin.Context) {
+			var arg struct {
+				Username string `json:"username"`
+				Password string `json:"password"`
+			}
+			if err := c.ShouldBindJSON(&arg); err != nil {
+				Ret400(c, err)
+				return
+			}
+			// Stub - always success for demo
+			RetOk(c, gin.H{
+				"success":   true,
+				"userId":    "1",
+				"isAdmin":   true,
+				"adminRole": "superadmin",
+				"token":     "demo_admin_token",
+			})
+		})
+		api.POST("/admin/user-list", func(c *gin.Context) {
+			RetOk(c, gin.H{"list": []interface{}{}})
+		})
+		api.POST("/admin/add-balance", func(c *gin.Context) {
+			RetOk(c, gin.H{"success": true})
+		})
+		api.POST("/admin/ban", func(c *gin.Context) {
+			RetOk(c, gin.H{"success": true})
+		})
+		api.POST("/admin/unban", func(c *gin.Context) {
+			RetOk(c, gin.H{"success": true})
+		})
 	}
 }

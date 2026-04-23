@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -76,13 +77,32 @@ func ApiGameNew(c *gin.Context) {
 	var ok bool
 
 	var arg struct {
-		CID   uint64 `json:"cid" binding:"required"`
-		UID   uint64 `json:"uid" binding:"required"`
-		Alias string `json:"alias" binding:"required"`
+		CID   uint64 `json:"cid"`
+		UID   uint64 `json:"uid"`
+		Alias string `json:"alias"`
 	}
 
-	if err = c.ShouldBind(&arg); err != nil {
-		Ret400(c, err)
+	// Try JSON body first
+	if err = c.ShouldBindJSON(&arg); err != nil {
+		// Try form data
+		arg.CID, _ = strconv.ParseUint(c.PostForm("cid"), 10, 64)
+		arg.UID, _ = strconv.ParseUint(c.PostForm("uid"), 10, 64)
+		arg.Alias = c.PostForm("alias")
+		if arg.Alias == "" {
+			arg.Alias = c.Query("alias")
+		}
+	}
+
+	// Set defaults
+	if arg.CID == 0 {
+		arg.CID = 1
+	}
+	if arg.UID == 0 {
+		Ret400(c, fmt.Errorf("uid is required"))
+		return
+	}
+	if arg.Alias == "" {
+		Ret400(c, fmt.Errorf("alias is required"))
 		return
 	}
 
